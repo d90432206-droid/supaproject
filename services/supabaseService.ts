@@ -1,6 +1,6 @@
 
 import { supabase } from '../supabaseClient';
-import { Project, Log, GlobalEngineer } from '../types';
+import { Project, Log, GlobalEngineer, SystemMessage } from '../types';
 import { CONFIG } from '../config';
 
 // 1. 定義與資料庫完全一致的介面 (大小寫敏感)
@@ -31,19 +31,28 @@ interface DBSettings {
   Description: string;
 }
 
+interface DBMessage {
+  MessageID: string;
+  Content: string;
+  Date: string;
+  Author: string;
+}
+
 export const SupabaseService = {
   // 1. 載入所有資料
-  loadData: async (): Promise<{ projects: Project[], logs: Log[], adminPassword: string, globalEngineers: GlobalEngineer[] }> => {
+  loadData: async (): Promise<{ projects: Project[], logs: Log[], adminPassword: string, globalEngineers: GlobalEngineer[], messages: SystemMessage[] }> => {
     try {
-      const [projRes, logRes, setRes] = await Promise.all([
+      const [projRes, logRes, setRes, msgRes] = await Promise.all([
         supabase.from(CONFIG.SUPABASE.TABLES.PROJECTS).select('*'),
         supabase.from(CONFIG.SUPABASE.TABLES.LOGS).select('*'),
-        supabase.from(CONFIG.SUPABASE.TABLES.SETTINGS).select('*') // 讀取所有設定
+        supabase.from(CONFIG.SUPABASE.TABLES.SETTINGS).select('*'), // 讀取所有設定
+        supabase.from(CONFIG.SUPABASE.TABLES.MESSAGES).select('*').order('Date', { ascending: false }) // 讀取公告
       ]);
 
       if (projRes.error) throw new Error(`Projects Error: ${projRes.error.message}`);
       if (logRes.error) throw new Error(`Logs Error: ${logRes.error.message}`);
       if (setRes.error) throw new Error(`Settings Error: ${setRes.error.message}`);
+      if (msgRes.error) throw new Error(`Messages Error: ${msgRes.error.message}`);
 
       // 轉換 Projects
       const projects: Project[] = (projRes.data as DBProject[]).map(p => {
@@ -92,7 +101,15 @@ export const SupabaseService = {
         }
       });
 
-      return { projects, logs, adminPassword, globalEngineers };
+      // 轉換 Messages
+      const messages: SystemMessage[] = (msgRes.data as DBMessage[]).map(m => ({
+        id: m.MessageID,
+        content: m.Content,
+        date: m.Date,
+        author: m.Author
+      }));
+
+      return { projects, logs, adminPassword, globalEngineers, messages };
     } catch (e) {
       throw e;
     }
@@ -167,7 +184,8 @@ export const SupabaseService = {
         .from(CONFIG.SUPABASE.TABLES.SETTINGS)
         .upsert(payload, { onConflict: 'Key' });
 
-      if (error) throw new Error(`Upsert Engineer Error: ${error.message}`);
+      // 增強錯誤拋出，包含 Error Code 以利前端判斷 RLS
+      if (error) throw new Error(`${error.message} (Code: ${error.code})`);
     } catch (e) {
       console.error("Save Engineer Error:", e);
       throw e;
@@ -184,6 +202,40 @@ export const SupabaseService = {
       if (error) throw new Error(`Delete Engineer Error: ${error.message}`);
     } catch (e) {
       console.error("Delete Engineer Error:", e);
+      throw e;
+    }
+  },
+
+  // 5. 系統公告 CRUD
+  upsertMessage: async (msg: SystemMessage): Promise<void> => {
+    try {
+      const payload = {
+        MessageID: msg.id,
+        Content: msg.content,
+        Date: msg.date,
+        Author: msg.author
+      };
+      const { error } = await supabase
+        .from(CONFIG.SUPABASE.TABLES.MESSAGES)
+        .upsert(payload, { onConflict: 'MessageID' });
+
+      if (error) throw new Error(`Upsert Message Error: ${error.message} (Code: ${error.code})`);
+    } catch (e) {
+      console.error("Save Message Error:", e);
+      throw e;
+    }
+  },
+
+  deleteMessage: async (id: string): Promise<void> => {
+    try {
+      const { error } = await supabase
+        .from(CONFIG.SUPABASE.TABLES.MESSAGES)
+        .delete()
+        .eq('MessageID', id);
+        
+      if (error) throw new Error(`Delete Message Error: ${error.message}`);
+    } catch (e) {
+      console.error("Delete Message Error:", e);
       throw e;
     }
   }

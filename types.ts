@@ -54,6 +54,14 @@ export interface Log {
   note: string;
 }
 
+// 系統公告
+export interface SystemMessage {
+  id: string;
+  content: string;
+  date: string;
+  author: string;
+}
+
 export interface LoginData {
   isLoggedIn: boolean;
   role: 'Admin' | 'Engineer';
@@ -67,5 +75,6 @@ export interface BackendData {
   projects: Project[];
   logs: Log[];
   adminPassword: string;
-  globalEngineers: GlobalEngineer[]; // 新增此欄位
+  globalEngineers: GlobalEngineer[]; 
+  messages: SystemMessage[]; // 新增此欄位
 }

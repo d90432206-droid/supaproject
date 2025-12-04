@@ -6,13 +6,14 @@ import { ProjectList } from './components/ProjectList';
 import { WBSEditor } from './components/WBSEditor';
 import { TimeLog } from './components/TimeLog';
 import { SupabaseService } from './services/supabaseService';
-import { Project, Log, LoginData, ViewState, GlobalEngineer } from './types';
+import { Project, Log, LoginData, ViewState, GlobalEngineer, SystemMessage } from './types';
 
 function App() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [logs, setLogs] = useState<Log[]>([]);
   const [adminPassword, setAdminPassword] = useState('8888');
   const [globalEngineers, setGlobalEngineers] = useState<GlobalEngineer[]>([]);
+  const [systemMessages, setSystemMessages] = useState<SystemMessage[]>([]);
   
   const [currentView, setCurrentView] = useState<ViewState>('dashboard');
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
@@ -41,6 +42,7 @@ function App() {
         setLogs(data.logs);
         setAdminPassword(data.adminPassword);
         setGlobalEngineers(data.globalEngineers);
+        setSystemMessages(data.messages);
         setIsOnline(true);
       })
       .catch(err => {
@@ -161,8 +163,16 @@ function App() {
     // API Update
     try {
         await SupabaseService.upsertGlobalEngineer(newEng);
-    } catch (e) {
-        alert('工程師資料儲存失敗');
+    } catch (e: any) {
+        // 修正：不再只顯示「儲存失敗」，而是顯示真正的錯誤訊息
+        const msg = e.message || JSON.stringify(e);
+        console.error("Save Engineer Full Error:", e);
+
+        if (msg.includes('42501') || msg.includes('row-level security')) {
+             alert(`儲存失敗：權限不足 (Code 42501)\n\n請確認 prj_Settings 表格已開啟 RLS 並設定 "Public Access" Policy。`);
+        } else {
+             alert(`工程師資料儲存失敗\n錯誤原因: ${msg}`);
+        }
         loadAllData(); // Revert on error
     }
   };
@@ -180,6 +190,47 @@ function App() {
         alert('刪除失敗');
         loadAllData();
     }
+  };
+
+  // Message Handlers
+  const handleSaveMessage = async (content: string) => {
+    const newMessage: SystemMessage = {
+        id: Date.now().toString(),
+        content,
+        date: new Date().toISOString().split('T')[0],
+        author: loginData.user
+    };
+
+    // UI Update
+    setSystemMessages([newMessage, ...systemMessages]);
+
+    // API
+    try {
+        await SupabaseService.upsertMessage(newMessage);
+    } catch (e: any) {
+         const msg = e.message || JSON.stringify(e);
+         if (msg.includes('42501')) {
+            alert('發布公告失敗：權限不足 (請檢查 prj_Messages RLS 設定)');
+         } else {
+            alert('發布公告失敗: ' + msg);
+         }
+         loadAllData();
+    }
+  };
+
+  const handleDeleteMessage = async (id: string) => {
+     if (!confirm("確定刪除此公告?")) return;
+     
+     // UI
+     setSystemMessages(systemMessages.filter(m => m.id !== id));
+
+     // API
+     try {
+         await SupabaseService.deleteMessage(id);
+     } catch (e) {
+         alert('刪除公告失敗');
+         loadAllData();
+     }
   };
 
   if (!loginData.isLoggedIn) {
@@ -247,7 +298,16 @@ function App() {
         isOnline={isOnline}
         isLoading={isLoading}
       >
-        {currentView === 'dashboard' && <Dashboard projects={projects} logs={logs} />}
+        {currentView === 'dashboard' && (
+             <Dashboard 
+                projects={projects} 
+                logs={logs} 
+                messages={systemMessages}
+                loginData={loginData}
+                onAddMessage={handleSaveMessage}
+                onDeleteMessage={handleDeleteMessage}
+             />
+        )}
         {currentView === 'projects' && (
           <ProjectList 
             projects={projects} 

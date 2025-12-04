@@ -1,16 +1,22 @@
+
 import React, { useMemo, useState } from 'react';
-import { Project, Log } from '../types';
+import { Project, Log, SystemMessage, LoginData } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 
 interface DashboardProps {
   projects: Project[];
   logs: Log[];
+  messages: SystemMessage[]; // 新增 Prop
+  loginData: LoginData;      // 新增 Prop 以判斷權限
+  onAddMessage: (content: string) => void;
+  onDeleteMessage: (id: string) => void;
 }
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#6366f1', '#ef4444'];
 
-export const Dashboard: React.FC<DashboardProps> = ({ projects, logs }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ projects, logs, messages, loginData, onAddMessage, onDeleteMessage }) => {
   const [projectFilter, setProjectFilter] = useState('');
+  const [newMessage, setNewMessage] = useState('');
 
   const activeProjects = projects.filter(p => p.status === 'Active');
   const totalBudget = projects.reduce((sum, p) => sum + (p.budgetHours || 0), 0);
@@ -41,9 +47,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ projects, logs }) => {
     return Object.entries(engHours).map(([name, value]) => ({ name, value }));
   }, [logs, projectFilter]);
 
+  const handlePublish = () => {
+    if(!newMessage.trim()) return;
+    onAddMessage(newMessage);
+    setNewMessage('');
+  };
+
   return (
     <div className="flex-1 overflow-y-auto p-8 animate-in fade-in">
-      <h2 className="text-2xl font-bold text-slate-800 mb-6">營運總覽 (Overview)</h2>
+      <h2 className="text-2xl font-bold text-slate-800 mb-6">營運總覽</h2>
 
       {/* KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -134,43 +146,90 @@ export const Dashboard: React.FC<DashboardProps> = ({ projects, logs }) => {
         </div>
       </div>
 
-      {/* Alert List */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-red-50">
-          <h3 className="font-bold text-red-700">
-            <i className="fa-solid fa-triangle-exclamation mr-2"></i>預警專案 (實際工時 &gt; 80% 預算)
-          </h3>
-        </div>
-        <table className="w-full text-sm text-left">
-          <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b">
-            <tr>
-              <th className="px-6 py-3">專案名稱</th>
-              <th className="px-6 py-3 text-right">預算工時</th>
-              <th className="px-6 py-3 text-right">實際工時</th>
-              <th className="px-6 py-3 text-right">使用率</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {alertProjects.length > 0 ? (
-              alertProjects.map(p => (
-                <tr key={p.id} className="hover:bg-slate-50">
-                  <td className="px-6 py-3 font-medium text-slate-800">{p.name}</td>
-                  <td className="px-6 py-3 text-right font-mono">{p.budgetHours}h</td>
-                  <td className="px-6 py-3 text-right font-mono text-red-600 font-bold">{p.actualHours}h</td>
-                  <td className="px-6 py-3 text-right">
-                    <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded text-xs font-bold">
-                      {Math.round(p.usage * 100)}%
-                    </span>
-                  </td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan={4} className="px-6 py-8 text-center text-slate-400 italic">目前無預警專案，所有專案皆在控制範圍內。</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* System Messages */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden flex flex-col max-h-[400px]">
+              <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-brand-50">
+                  <h3 className="font-bold text-brand-700">
+                      <i className="fa-solid fa-bullhorn mr-2"></i>系統公告
+                  </h3>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scroll">
+                  {messages.length === 0 ? (
+                      <p className="text-center text-slate-400 text-sm italic py-4">目前無公告</p>
+                  ) : (
+                      messages.map(msg => (
+                          <div key={msg.id} className="bg-slate-50 p-3 rounded-lg border border-slate-100 relative group">
+                              <div className="flex justify-between items-start mb-1">
+                                  <span className="text-xs font-bold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">{msg.date}</span>
+                                  {loginData.role === 'Admin' && (
+                                      <button onClick={() => onDeleteMessage(msg.id)} className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                                          <i className="fa-solid fa-trash text-xs"></i>
+                                      </button>
+                                  )}
+                              </div>
+                              <p className="text-sm text-slate-700 font-medium whitespace-pre-wrap">{msg.content}</p>
+                              <div className="mt-1 text-[10px] text-slate-400 text-right">- {msg.author}</div>
+                          </div>
+                      ))
+                  )}
+              </div>
+              {loginData.role === 'Admin' && (
+                  <div className="p-4 border-t border-slate-100 bg-slate-50">
+                      <div className="flex gap-2">
+                          <input 
+                            value={newMessage}
+                            onChange={(e) => setNewMessage(e.target.value)}
+                            placeholder="輸入公告內容..." 
+                            className="flex-1 border border-slate-200 rounded px-3 py-2 text-sm outline-none focus:border-brand-500"
+                            onKeyDown={(e) => e.key === 'Enter' && handlePublish()}
+                          />
+                          <button onClick={handlePublish} className="bg-brand-600 text-white px-4 py-2 rounded text-sm font-bold hover:bg-brand-700">發布</button>
+                      </div>
+                  </div>
+              )}
+          </div>
+
+          {/* Alert List */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden max-h-[400px] flex flex-col">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-red-50">
+              <h3 className="font-bold text-red-700">
+                <i className="fa-solid fa-triangle-exclamation mr-2"></i>預警專案 (&gt;80%)
+              </h3>
+            </div>
+            <div className="overflow-y-auto custom-scroll flex-1">
+                <table className="w-full text-sm text-left">
+                <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b sticky top-0">
+                    <tr>
+                    <th className="px-6 py-3">專案</th>
+                    <th className="px-6 py-3 text-right">預算</th>
+                    <th className="px-6 py-3 text-right">實際</th>
+                    <th className="px-6 py-3 text-right">使用率</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                    {alertProjects.length > 0 ? (
+                    alertProjects.map(p => (
+                        <tr key={p.id} className="hover:bg-slate-50">
+                        <td className="px-6 py-3 font-medium text-slate-800 truncate max-w-[120px]" title={p.name}>{p.name}</td>
+                        <td className="px-6 py-3 text-right font-mono">{p.budgetHours}h</td>
+                        <td className="px-6 py-3 text-right font-mono text-red-600 font-bold">{p.actualHours}h</td>
+                        <td className="px-6 py-3 text-right">
+                            <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded text-xs font-bold">
+                            {Math.round(p.usage * 100)}%
+                            </span>
+                        </td>
+                        </tr>
+                    ))
+                    ) : (
+                    <tr>
+                        <td colSpan={4} className="px-6 py-8 text-center text-slate-400 italic">目前無預警專案。</td>
+                    </tr>
+                    )}
+                </tbody>
+                </table>
+            </div>
+          </div>
       </div>
     </div>
   );

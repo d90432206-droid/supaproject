@@ -14,7 +14,8 @@ export const CONFIG = {
     TABLES: {
       PROJECTS: 'prj_Projects',
       LOGS: 'prj_Logs',
-      SETTINGS: 'prj_Settings'
+      SETTINGS: 'prj_Settings',
+      MESSAGES: 'prj_Messages'
     }
   }
 };
