@@ -2,43 +2,44 @@
 import { supabase } from '../supabaseClient';
 import { Project, Log } from '../types';
 
-// 對應資料庫欄位的介面 (Supabase 回傳的格式通常為小寫)
+// 1. 定義與資料庫完全一致的介面 (大小寫敏感)
+// 根據您的截圖，資料表與欄位名稱皆為大寫開頭
 interface DBProject {
-  projectid: string;
-  name: string;
-  client: string;
-  budgethours: number;
-  status: string;
-  startdate: string;
-  enddate: string | null;
-  details_json: any; // WBS, engineers, tasks, holidays
+  ProjectID: string;
+  Name: string;
+  Client: string;
+  BudgetHours: number;
+  Status: string;
+  StartDate: string;
+  EndDate: string | null;
+  Details_JSON: string; // 資料庫截圖顯示為 text 型別
 }
 
 interface DBLog {
-  logid: number;
-  date: string;
-  projectid: string;
-  engineer: string;
-  taskid: string;
-  hours: number;
-  note: string;
+  LogID: string; // 資料庫截圖顯示為 text 型別
+  Date: string;
+  ProjectID: string;
+  Engineer: string;
+  TaskID: string;
+  Hours: number;
+  Note: string;
 }
 
 interface DBSettings {
-  key: string;
-  value: string;
-  description: string;
+  Key: string;
+  Value: string;
+  Description: string;
 }
 
 export const SupabaseService = {
   // 1. 載入所有資料
   loadData: async (): Promise<{ projects: Project[], logs: Log[], adminPassword: string }> => {
     try {
-      // 平行請求三個表格 (使用小寫名稱)
+      // 使用大寫 Table Name (Projects, Logs, Settings)
       const [projRes, logRes, setRes] = await Promise.all([
-        supabase.from('projects').select('*'),
-        supabase.from('logs').select('*'),
-        supabase.from('settings').select('*').eq('key', 'AdminPassword').single()
+        supabase.from('Projects').select('*'),
+        supabase.from('Logs').select('*'),
+        supabase.from('Settings').select('*').eq('Key', 'AdminPassword').single()
       ]);
 
       if (projRes.error) {
@@ -50,37 +51,46 @@ export const SupabaseService = {
         throw logRes.error;
       }
 
-      // 轉換 Projects: DB 格式 (小寫) -> App 格式
-      const projects: Project[] = (projRes.data as DBProject[]).map(p => ({
-        id: p.projectid,
-        name: p.name,
-        client: p.client,
-        budgetHours: p.budgethours,
-        status: p.status as 'Active' | 'Closed',
-        startDate: p.startdate,
-        endDate: p.enddate,
-        // 解構 JSON 欄位
-        wbs: p.details_json?.wbs || [],
-        engineers: p.details_json?.engineers || [],
-        tasks: p.details_json?.tasks || [],
-        holidays: p.details_json?.holidays || []
-      }));
+      // 轉換 Projects
+      const projects: Project[] = (projRes.data as DBProject[]).map(p => {
+        // 處理 Details_JSON (text -> object)
+        let details: any = {};
+        try {
+          details = p.Details_JSON ? JSON.parse(p.Details_JSON) : {};
+        } catch (e) {
+          console.warn("JSON Parse Error for Project:", p.ProjectID);
+        }
 
-      // 轉換 Logs: DB 格式 (小寫) -> App 格式
+        return {
+          id: p.ProjectID,
+          name: p.Name,
+          client: p.Client,
+          budgetHours: p.BudgetHours,
+          status: p.Status as 'Active' | 'Closed',
+          startDate: p.StartDate,
+          endDate: p.EndDate,
+          wbs: details.wbs || [],
+          engineers: details.engineers || [],
+          tasks: details.tasks || [],
+          holidays: details.holidays || []
+        };
+      });
+
+      // 轉換 Logs
       const logs: Log[] = (logRes.data as DBLog[]).map(l => ({
-        logId: l.logid,
-        date: l.date,
-        projectId: l.projectid,
-        engineer: l.engineer,
-        taskId: l.taskid,
-        hours: l.hours,
-        note: l.note
+        logId: Number(l.LogID), // 轉回 number
+        date: l.Date,
+        projectId: l.ProjectID,
+        engineer: l.Engineer,
+        taskId: l.TaskID,
+        hours: l.Hours,
+        note: l.Note
       }));
 
       // 取得密碼
       let adminPassword = '8888';
       if (setRes.data) {
-        adminPassword = (setRes.data as DBSettings).value;
+        adminPassword = (setRes.data as DBSettings).Value; // 注意是用 Value (大寫)
       }
 
       return { projects, logs, adminPassword };
@@ -93,26 +103,29 @@ export const SupabaseService = {
   // 2. 更新或新增單一專案
   upsertProject: async (project: Project): Promise<void> => {
     try {
-      // 轉換為小寫欄位名稱
+      // 準備存入 DB 的 JSON 物件
+      const detailsObj = {
+        wbs: project.wbs,
+        engineers: project.engineers,
+        tasks: project.tasks,
+        holidays: project.holidays
+      };
+
       const payload = {
-        projectid: project.id,
-        name: project.name,
-        client: project.client || '',
-        budgethours: project.budgetHours || 0,
-        status: project.status,
-        startdate: project.startDate,
-        enddate: project.endDate,
-        details_json: {
-          wbs: project.wbs,
-          engineers: project.engineers,
-          tasks: project.tasks,
-          holidays: project.holidays
-        }
+        ProjectID: project.id,
+        Name: project.name,
+        Client: project.client || '',
+        BudgetHours: project.budgetHours || 0,
+        Status: project.status,
+        StartDate: project.startDate,
+        EndDate: project.endDate,
+        // 將物件轉為 JSON 字串存入 text 欄位
+        Details_JSON: JSON.stringify(detailsObj)
       };
 
       const { error } = await supabase
-        .from('projects')
-        .upsert(payload, { onConflict: 'projectid' });
+        .from('Projects')
+        .upsert(payload, { onConflict: 'ProjectID' });
 
       if (error) throw error;
     } catch (e) {
@@ -125,18 +138,18 @@ export const SupabaseService = {
   upsertLog: async (log: Log): Promise<void> => {
     try {
       const payload = {
-        logid: log.logId,
-        date: log.date,
-        projectid: log.projectId,
-        engineer: log.engineer,
-        taskid: log.taskId || '',
-        hours: log.hours,
-        note: log.note || ''
+        LogID: String(log.logId), // 轉為 string 存入
+        Date: log.date,
+        ProjectID: log.projectId,
+        Engineer: log.engineer,
+        TaskID: String(log.taskId || ''),
+        Hours: log.hours,
+        Note: log.note || ''
       };
 
       const { error } = await supabase
-        .from('logs')
-        .upsert(payload, { onConflict: 'logid' });
+        .from('Logs')
+        .upsert(payload, { onConflict: 'LogID' });
 
       if (error) throw error;
     } catch (e) {
