@@ -3,7 +3,6 @@ import { supabase } from '../supabaseClient';
 import { Project, Log } from '../types';
 
 // 1. 定義與資料庫完全一致的介面 (大小寫敏感)
-// 根據您的截圖，資料表與欄位名稱皆為大寫開頭
 interface DBProject {
   ProjectID: string;
   Name: string;
@@ -12,11 +11,11 @@ interface DBProject {
   Status: string;
   StartDate: string;
   EndDate: string | null;
-  Details_JSON: string; // 資料庫截圖顯示為 text 型別
+  Details_JSON: string;
 }
 
 interface DBLog {
-  LogID: string; // 資料庫截圖顯示為 text 型別
+  LogID: string;
   Date: string;
   ProjectID: string;
   Engineer: string;
@@ -27,7 +26,7 @@ interface DBLog {
 
 interface DBSettings {
   Key: string;
-  Value: string;
+  Value: string | number; // 資料庫可能是 int8 或 text
   Description: string;
 }
 
@@ -35,7 +34,6 @@ export const SupabaseService = {
   // 1. 載入所有資料
   loadData: async (): Promise<{ projects: Project[], logs: Log[], adminPassword: string }> => {
     try {
-      // 使用大寫 Table Name (Projects, Logs, Settings)
       const [projRes, logRes, setRes] = await Promise.all([
         supabase.from('Projects').select('*'),
         supabase.from('Logs').select('*'),
@@ -51,7 +49,6 @@ export const SupabaseService = {
 
       // 轉換 Projects
       const projects: Project[] = (projRes.data as DBProject[]).map(p => {
-        // 處理 Details_JSON (text -> object)
         let details: any = {};
         try {
           details = p.Details_JSON ? JSON.parse(p.Details_JSON) : {};
@@ -76,7 +73,7 @@ export const SupabaseService = {
 
       // 轉換 Logs
       const logs: Log[] = (logRes.data as DBLog[]).map(l => ({
-        logId: Number(l.LogID), // 轉回 number
+        logId: Number(l.LogID),
         date: l.Date,
         projectId: l.ProjectID,
         engineer: l.Engineer,
@@ -87,14 +84,14 @@ export const SupabaseService = {
 
       // 取得密碼
       let adminPassword = '8888';
-      // setRes.data 可能是 null (如果沒找到資料)
       if (setRes.data) {
-        adminPassword = (setRes.data as DBSettings).Value; 
+        // [修正關鍵] 強制轉為字串 String()
+        // 因為資料庫欄位是 int8 (數字)，但前端比對需要字串
+        adminPassword = String((setRes.data as DBSettings).Value); 
       }
 
       return { projects, logs, adminPassword };
     } catch (e) {
-      // 直接往上拋，由 App.tsx 處理顯示
       throw e;
     }
   },
@@ -102,7 +99,6 @@ export const SupabaseService = {
   // 2. 更新或新增單一專案
   upsertProject: async (project: Project): Promise<void> => {
     try {
-      // 準備存入 DB 的 JSON 物件
       const detailsObj = {
         wbs: project.wbs,
         engineers: project.engineers,
@@ -110,19 +106,16 @@ export const SupabaseService = {
         holidays: project.holidays
       };
 
-      // 嚴格處理資料型別，避免 PostgreSQL 報錯
-      // EndDate 若為空字串，必須轉為 null
       const safeEndDate = project.endDate && project.endDate.trim() !== '' ? project.endDate : null;
 
       const payload = {
         ProjectID: project.id,
         Name: project.name,
         Client: project.client || '',
-        BudgetHours: Number(project.budgetHours || 0), // 確保為數字
+        BudgetHours: Number(project.budgetHours || 0),
         Status: project.status,
         StartDate: project.startDate,
         EndDate: safeEndDate,
-        // 將物件轉為 JSON 字串存入 text 欄位
         Details_JSON: JSON.stringify(detailsObj)
       };
 
@@ -143,12 +136,12 @@ export const SupabaseService = {
   upsertLog: async (log: Log): Promise<void> => {
     try {
       const payload = {
-        LogID: String(log.logId), // 轉為 string 存入
+        LogID: String(log.logId),
         Date: log.date,
         ProjectID: log.projectId,
         Engineer: log.engineer,
         TaskID: String(log.taskId || ''),
-        Hours: Number(log.hours), // 確保為數字
+        Hours: Number(log.hours),
         Note: log.note || ''
       };
 
