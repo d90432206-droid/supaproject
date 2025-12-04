@@ -16,11 +16,11 @@ const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#6366f1'
 
 export const Dashboard: React.FC<DashboardProps> = ({ projects, logs, messages, loginData, onAddMessage, onDeleteMessage }) => {
   const [projectFilter, setProjectFilter] = useState('');
-  const [yearFilter, setYearFilter] = useState(new Date().getFullYear().toString()); // 新增年份篩選
+  const [yearFilter, setYearFilter] = useState(new Date().getFullYear().toString());
   const [newMessage, setNewMessage] = useState('');
 
   const activeProjects = projects.filter(p => p.status === 'Active');
-  const closedProjects = projects.filter(p => p.status === 'Closed'); // 取得已結案專案
+  const closedProjects = projects.filter(p => p.status === 'Closed');
 
   const totalBudget = projects.reduce((sum, p) => sum + (p.budgetHours || 0), 0);
   
@@ -263,7 +263,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ projects, logs, messages, 
 
       {/* New Section: Closed Projects Review */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden mb-8">
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-100">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-center lg:justify-between bg-slate-100">
               <h3 className="font-bold text-slate-700">
                 <i className="fa-solid fa-archive mr-2"></i>已結案專案回顧
               </h3>

@@ -52,29 +52,54 @@ const normalizeKeys = (obj: any) => {
   return obj;
 };
 
+// 輔助函式：自動分頁讀取所有資料 (突破 1000/10000 筆限制)
+const fetchAllData = async (table: string, sortCol: string | null = null) => {
+  let allData: any[] = [];
+  let page = 0;
+  const pageSize = 1000; // 每次讀取 1000 筆
+  
+  while (true) {
+    let query = supabase.from(table).select('*');
+    
+    // 如果有指定排序，則加入排序條件
+    if (sortCol) {
+      query = query.order(sortCol, { ascending: false });
+    }
+    
+    // 分頁讀取
+    const { data, error } = await query.range(page * pageSize, (page + 1) * pageSize - 1);
+    
+    if (error) throw new Error(`${table} Fetch Error: ${error.message}`);
+    
+    if (!data || data.length === 0) break; // 讀不到資料了，結束
+    
+    allData = allData.concat(data);
+    
+    if (data.length < pageSize) break; // 這次讀不滿 1000 筆，代表是最後一頁了
+    
+    page++;
+  }
+  
+  return allData;
+};
+
 export const SupabaseService = {
-  // 1. 載入所有資料
+  // 1. 載入所有資料 (使用 fetchAllData 確保讀取完整資料庫)
   loadData: async (): Promise<{ projects: Project[], logs: Log[], adminPassword: string, globalEngineers: GlobalEngineer[], messages: SystemMessage[] }> => {
     try {
-      // 修正：加入 .range(0, 9999) 以突破預設 1000 筆的限制
-      // 修正：加入 .order('date', { ascending: false }) 確保優先撈取最新的日報
-      const [projRes, logRes, setRes, msgRes] = await Promise.all([
-        supabase.from(CONFIG.SUPABASE.TABLES.PROJECTS).select('*').range(0, 9999),
-        supabase.from(CONFIG.SUPABASE.TABLES.LOGS).select('*').order('date', { ascending: false }).range(0, 9999),
-        supabase.from(CONFIG.SUPABASE.TABLES.SETTINGS).select('*').range(0, 9999), // 讀取所有設定
-        supabase.from(CONFIG.SUPABASE.TABLES.MESSAGES).select('*').order('date', { ascending: false }).range(0, 99) // 公告不需要太多
+      // 平行執行所有讀取
+      const [rawProjectsData, rawLogsData, rawSettingsData, rawMessagesData] = await Promise.all([
+        fetchAllData(CONFIG.SUPABASE.TABLES.PROJECTS),
+        fetchAllData(CONFIG.SUPABASE.TABLES.LOGS, 'date'), // 依照日期排序
+        fetchAllData(CONFIG.SUPABASE.TABLES.SETTINGS),
+        fetchAllData(CONFIG.SUPABASE.TABLES.MESSAGES, 'date')
       ]);
 
-      if (projRes.error) throw new Error(`Projects Error: ${projRes.error.message}`);
-      if (logRes.error) throw new Error(`Logs Error: ${logRes.error.message}`);
-      if (setRes.error) throw new Error(`Settings Error: ${setRes.error.message}`);
-      if (msgRes.error) throw new Error(`Messages Error: ${msgRes.error.message}`);
-
       // 正規化鍵值 (轉小寫)
-      const rawProjects = normalizeKeys(projRes.data) as DBProject[];
-      const rawLogs = normalizeKeys(logRes.data) as DBLog[];
-      const rawSettings = normalizeKeys(setRes.data) as DBSettings[];
-      const rawMessages = normalizeKeys(msgRes.data) as DBMessage[];
+      const rawProjects = normalizeKeys(rawProjectsData) as DBProject[];
+      const rawLogs = normalizeKeys(rawLogsData) as DBLog[];
+      const rawSettings = normalizeKeys(rawSettingsData) as DBSettings[];
+      const rawMessages = normalizeKeys(rawMessagesData) as DBMessage[];
 
       // 轉換 Projects
       const projects: Project[] = rawProjects.map(p => {
