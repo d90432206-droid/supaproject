@@ -6,8 +6,8 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pi
 interface DashboardProps {
   projects: Project[];
   logs: Log[];
-  messages: SystemMessage[]; // 新增 Prop
-  loginData: LoginData;      // 新增 Prop 以判斷權限
+  messages: SystemMessage[];
+  loginData: LoginData;
   onAddMessage: (content: string) => void;
   onDeleteMessage: (id: string) => void;
 }
@@ -20,12 +20,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ projects, logs, messages, 
 
   const activeProjects = projects.filter(p => p.status === 'Active');
   const totalBudget = projects.reduce((sum, p) => sum + (p.budgetHours || 0), 0);
-  const totalActual = logs.reduce((sum, l) => sum + (l.hours || 0), 0);
+  
+  // 修復：解決浮點數運算誤差，並保留一位小數
+  const rawTotalActual = logs.reduce((sum, l) => sum + (l.hours || 0), 0);
+  const totalActual = Math.round(rawTotalActual * 10) / 10; 
 
   const alertProjects = useMemo(() => {
     return projects.map(p => {
       const actual = logs.filter(l => l.projectId === p.id).reduce((s, l) => s + l.hours, 0);
-      return { ...p, actualHours: actual, usage: p.budgetHours > 0 ? (actual / p.budgetHours) : 0 };
+      return { ...p, actualHours: Math.round(actual * 10) / 10, usage: p.budgetHours > 0 ? (actual / p.budgetHours) : 0 };
     }).filter(p => p.budgetHours > 0 && p.actualHours > (p.budgetHours * 0.8));
   }, [projects, logs]);
 
@@ -34,7 +37,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ projects, logs, messages, 
       id: p.id,
       name: p.name,
       budget: p.budgetHours,
-      actual: logs.filter(l => l.projectId === p.id).reduce((s, l) => s + l.hours, 0)
+      actual: Math.round(logs.filter(l => l.projectId === p.id).reduce((s, l) => s + l.hours, 0) * 10) / 10
     }));
   }, [projects, logs]);
 
@@ -44,7 +47,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ projects, logs, messages, 
     filteredLogs.forEach(l => {
       engHours[l.engineer] = (engHours[l.engineer] || 0) + l.hours;
     });
-    return Object.entries(engHours).map(([name, value]) => ({ name, value }));
+    return Object.entries(engHours).map(([name, value]) => ({ name, value: Math.round(value * 10) / 10 }));
   }, [logs, projectFilter]);
 
   const handlePublish = () => {
@@ -65,11 +68,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ projects, logs, messages, 
         </div>
         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
           <div className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">總預算工時</div>
-          <div className="text-3xl font-bold text-brand-600">{totalBudget} h</div>
+          <div className="text-3xl font-bold text-brand-600">{totalBudget.toLocaleString()} h</div>
         </div>
         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
           <div className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">實際投入總工時</div>
-          <div className={`text-3xl font-bold ${totalActual > totalBudget ? 'text-red-500' : 'text-emerald-600'}`}>{totalActual} h</div>
+          <div className={`text-3xl font-bold ${totalActual > totalBudget ? 'text-red-500' : 'text-emerald-600'}`}>{totalActual.toLocaleString()} h</div>
         </div>
       </div>
 

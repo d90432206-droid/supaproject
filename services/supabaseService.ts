@@ -56,11 +56,12 @@ export const SupabaseService = {
   // 1. 載入所有資料
   loadData: async (): Promise<{ projects: Project[], logs: Log[], adminPassword: string, globalEngineers: GlobalEngineer[], messages: SystemMessage[] }> => {
     try {
+      // 修正：加入 .range(0, 9999) 以突破預設 1000 筆的限制
       const [projRes, logRes, setRes, msgRes] = await Promise.all([
-        supabase.from(CONFIG.SUPABASE.TABLES.PROJECTS).select('*'),
-        supabase.from(CONFIG.SUPABASE.TABLES.LOGS).select('*'),
-        supabase.from(CONFIG.SUPABASE.TABLES.SETTINGS).select('*'), // 讀取所有設定
-        supabase.from(CONFIG.SUPABASE.TABLES.MESSAGES).select('*').order('date', { ascending: false }) // 讀取公告
+        supabase.from(CONFIG.SUPABASE.TABLES.PROJECTS).select('*').range(0, 9999),
+        supabase.from(CONFIG.SUPABASE.TABLES.LOGS).select('*').range(0, 9999),
+        supabase.from(CONFIG.SUPABASE.TABLES.SETTINGS).select('*').range(0, 9999), // 讀取所有設定
+        supabase.from(CONFIG.SUPABASE.TABLES.MESSAGES).select('*').order('date', { ascending: false }).range(0, 99) // 公告不需要太多
       ]);
 
       if (projRes.error) throw new Error(`Projects Error: ${projRes.error.message}`);
