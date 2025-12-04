@@ -43,12 +43,10 @@ export const SupabaseService = {
       ]);
 
       if (projRes.error) {
-        console.error("Projects Fetch Error:", projRes.error);
-        throw projRes.error;
+        throw new Error(`Projects Fetch Error: ${projRes.error.message} (${projRes.error.details || ''})`);
       }
       if (logRes.error) {
-        console.error("Logs Fetch Error:", logRes.error);
-        throw logRes.error;
+         throw new Error(`Logs Fetch Error: ${logRes.error.message} (${logRes.error.details || ''})`);
       }
 
       // 轉換 Projects
@@ -89,13 +87,14 @@ export const SupabaseService = {
 
       // 取得密碼
       let adminPassword = '8888';
+      // setRes.data 可能是 null (如果沒找到資料)
       if (setRes.data) {
-        adminPassword = (setRes.data as DBSettings).Value; // 注意是用 Value (大寫)
+        adminPassword = (setRes.data as DBSettings).Value; 
       }
 
       return { projects, logs, adminPassword };
     } catch (e) {
-      console.error("Supabase Load Error Details:", e);
+      // 直接往上拋，由 App.tsx 處理顯示
       throw e;
     }
   },
@@ -111,14 +110,18 @@ export const SupabaseService = {
         holidays: project.holidays
       };
 
+      // 嚴格處理資料型別，避免 PostgreSQL 報錯
+      // EndDate 若為空字串，必須轉為 null
+      const safeEndDate = project.endDate && project.endDate.trim() !== '' ? project.endDate : null;
+
       const payload = {
         ProjectID: project.id,
         Name: project.name,
         Client: project.client || '',
-        BudgetHours: project.budgetHours || 0,
+        BudgetHours: Number(project.budgetHours || 0), // 確保為數字
         Status: project.status,
         StartDate: project.startDate,
-        EndDate: project.endDate,
+        EndDate: safeEndDate,
         // 將物件轉為 JSON 字串存入 text 欄位
         Details_JSON: JSON.stringify(detailsObj)
       };
@@ -127,7 +130,9 @@ export const SupabaseService = {
         .from('Projects')
         .upsert(payload, { onConflict: 'ProjectID' });
 
-      if (error) throw error;
+      if (error) {
+        throw new Error(`Supabase Upsert Error: ${error.message} (Code: ${error.code})`);
+      }
     } catch (e) {
       console.error("Supabase Save Project Error:", e);
       throw e;
@@ -143,7 +148,7 @@ export const SupabaseService = {
         ProjectID: log.projectId,
         Engineer: log.engineer,
         TaskID: String(log.taskId || ''),
-        Hours: log.hours,
+        Hours: Number(log.hours), // 確保為數字
         Note: log.note || ''
       };
 
@@ -151,7 +156,9 @@ export const SupabaseService = {
         .from('Logs')
         .upsert(payload, { onConflict: 'LogID' });
 
-      if (error) throw error;
+      if (error) {
+        throw new Error(`Supabase Upsert Log Error: ${error.message}`);
+      }
     } catch (e) {
       console.error("Supabase Save Log Error:", e);
       throw e;

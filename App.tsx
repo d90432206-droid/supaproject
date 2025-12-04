@@ -33,9 +33,14 @@ function App() {
         setIsOnline(true);
       })
       .catch(err => {
-        console.error("Load failed", err);
+        console.error("Load failed full error:", err);
+        const errorMsg = err instanceof Error ? err.message : JSON.stringify(err);
+        // 若連線失敗，可能是 API Key 或 Table 不存在，顯示清楚的訊息
+        if (!isOnline) {
+             // 這裡不使用 alert 避免進入頁面就一直跳窗，僅在 Console 顯示
+             console.error("Supabase 連線失敗:", errorMsg);
+        }
         setIsOnline(false); 
-        // Optional: fallback to local storage if needed, or show error
       })
       .finally(() => setIsLoading(false));
   }, []);
@@ -76,8 +81,11 @@ function App() {
     setIsLoading(true);
     try {
         await SupabaseService.upsertProject(p);
-    } catch (e) {
-        alert('儲存失敗: ' + e);
+    } catch (e: any) {
+        // 顯示可閱讀的錯誤訊息
+        const msg = e.message || JSON.stringify(e);
+        alert('儲存失敗: ' + msg + '\n\n(可能是權限不足，請檢查 Supabase RLS 設定)');
+        console.error("Save Project Error:", e);
         // 若失敗可能需要還原 State (此處省略複雜還原邏輯)
     } finally {
         setIsLoading(false);
@@ -104,8 +112,10 @@ function App() {
     setIsLoading(true);
     try {
         await SupabaseService.upsertLog(newLogItem);
-    } catch (e) {
-        alert('儲存失敗: ' + e);
+    } catch (e: any) {
+        const msg = e.message || JSON.stringify(e);
+        alert('儲存失敗: ' + msg);
+        console.error("Save Log Error:", e);
     } finally {
         setIsLoading(false);
     }
