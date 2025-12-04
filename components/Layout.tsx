@@ -8,19 +8,19 @@ interface LayoutProps {
   currentView: ViewState;
   setView: (view: ViewState) => void;
   onLogout: () => void;
+  onOpenAdminPanel?: () => void; // New Prop
   isOnline: boolean;
   isLoading: boolean;
 }
 
 export const Layout: React.FC<LayoutProps> = ({ 
-  children, loginData, currentView, setView, onLogout, isOnline, isLoading 
+  children, loginData, currentView, setView, onLogout, onOpenAdminPanel, isOnline, isLoading 
 }) => {
   return (
     <div className="flex h-screen overflow-hidden">
       {/* Sidebar */}
       <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col shrink-0 transition-all duration-300 relative z-40">
         <div className="h-20 flex items-center px-6 border-b border-slate-800">
-          {/* Brand Logo - Image Replacement */}
           <img 
             src="/logo.png" 
             alt="Logo" 
@@ -65,6 +65,15 @@ export const Layout: React.FC<LayoutProps> = ({
             isActive={currentView === 'timelog'} 
             onClick={() => setView('timelog')} 
           />
+          
+          {/* Admin Only Button */}
+          {loginData.role === 'Admin' && (
+            <div className="mt-6 px-6">
+              <button onClick={onOpenAdminPanel} className="w-full border border-slate-700 hover:bg-slate-800 text-slate-400 hover:text-white transition-colors py-2 rounded text-xs font-bold flex items-center justify-center">
+                <i className="fa-solid fa-users-gear mr-2"></i> 成員管理
+              </button>
+            </div>
+          )}
         </nav>
 
         <div className="p-6 border-t border-slate-800 bg-slate-950/30">

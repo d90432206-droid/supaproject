@@ -1,6 +1,6 @@
 
 import { supabase } from '../supabaseClient';
-import { Project, Log } from '../types';
+import { Project, Log, GlobalEngineer } from '../types';
 import { CONFIG } from '../config';
 
 // 1. 定義與資料庫完全一致的介面 (大小寫敏感)
@@ -27,37 +27,28 @@ interface DBLog {
 
 interface DBSettings {
   Key: string;
-  Value: string | number; // 資料庫可能是 int8 或 text
+  Value: string | number; 
   Description: string;
 }
 
 export const SupabaseService = {
   // 1. 載入所有資料
-  loadData: async (): Promise<{ projects: Project[], logs: Log[], adminPassword: string }> => {
+  loadData: async (): Promise<{ projects: Project[], logs: Log[], adminPassword: string, globalEngineers: GlobalEngineer[] }> => {
     try {
-      // 使用 CONFIG.SUPABASE.TABLES 取代硬編碼的字串
       const [projRes, logRes, setRes] = await Promise.all([
         supabase.from(CONFIG.SUPABASE.TABLES.PROJECTS).select('*'),
         supabase.from(CONFIG.SUPABASE.TABLES.LOGS).select('*'),
-        supabase.from(CONFIG.SUPABASE.TABLES.SETTINGS).select('*').eq('Key', 'AdminPassword').single()
+        supabase.from(CONFIG.SUPABASE.TABLES.SETTINGS).select('*') // 讀取所有設定
       ]);
 
-      if (projRes.error) {
-        throw new Error(`Projects Fetch Error: ${projRes.error.message} (${projRes.error.details || ''})`);
-      }
-      if (logRes.error) {
-         throw new Error(`Logs Fetch Error: ${logRes.error.message} (${logRes.error.details || ''})`);
-      }
+      if (projRes.error) throw new Error(`Projects Error: ${projRes.error.message}`);
+      if (logRes.error) throw new Error(`Logs Error: ${logRes.error.message}`);
+      if (setRes.error) throw new Error(`Settings Error: ${setRes.error.message}`);
 
       // 轉換 Projects
       const projects: Project[] = (projRes.data as DBProject[]).map(p => {
         let details: any = {};
-        try {
-          details = p.Details_JSON ? JSON.parse(p.Details_JSON) : {};
-        } catch (e) {
-          console.warn("JSON Parse Error for Project:", p.ProjectID);
-        }
-
+        try { details = p.Details_JSON ? JSON.parse(p.Details_JSON) : {}; } catch (e) {}
         return {
           id: p.ProjectID,
           name: p.Name,
@@ -84,14 +75,24 @@ export const SupabaseService = {
         note: l.Note
       }));
 
-      // 取得密碼
+      // 解析 Settings
       let adminPassword = '8888';
-      if (setRes.data) {
-        // 強制轉為字串 String()
-        adminPassword = String((setRes.data as DBSettings).Value); 
-      }
+      const globalEngineers: GlobalEngineer[] = [];
 
-      return { projects, logs, adminPassword };
+      (setRes.data as DBSettings[]).forEach(s => {
+        if (s.Key === 'AdminPassword') {
+          adminPassword = String(s.Value);
+        } else if (s.Key.startsWith('User:')) {
+          // 解析工程師設定: Key="User:Name", Value="Password", Description="Color"
+          globalEngineers.push({
+            name: s.Key.replace('User:', ''),
+            password: String(s.Value),
+            color: s.Description || '#3b82f6'
+          });
+        }
+      });
+
+      return { projects, logs, adminPassword, globalEngineers };
     } catch (e) {
       throw e;
     }
@@ -106,7 +107,6 @@ export const SupabaseService = {
         tasks: project.tasks,
         holidays: project.holidays
       };
-
       const safeEndDate = project.endDate && project.endDate.trim() !== '' ? project.endDate : null;
 
       const payload = {
@@ -121,14 +121,12 @@ export const SupabaseService = {
       };
 
       const { error } = await supabase
-        .from(CONFIG.SUPABASE.TABLES.PROJECTS) // 使用設定檔中的表格名稱
+        .from(CONFIG.SUPABASE.TABLES.PROJECTS)
         .upsert(payload, { onConflict: 'ProjectID' });
 
-      if (error) {
-        throw new Error(`Supabase Upsert Error: ${error.message} (Code: ${error.code})`);
-      }
+      if (error) throw new Error(`Upsert Project Error: ${error.message}`);
     } catch (e) {
-      console.error("Supabase Save Project Error:", e);
+      console.error("Save Project Error:", e);
       throw e;
     }
   },
@@ -147,14 +145,45 @@ export const SupabaseService = {
       };
 
       const { error } = await supabase
-        .from(CONFIG.SUPABASE.TABLES.LOGS) // 使用設定檔中的表格名稱
+        .from(CONFIG.SUPABASE.TABLES.LOGS)
         .upsert(payload, { onConflict: 'LogID' });
 
-      if (error) {
-        throw new Error(`Supabase Upsert Log Error: ${error.message}`);
-      }
+      if (error) throw new Error(`Upsert Log Error: ${error.message}`);
     } catch (e) {
-      console.error("Supabase Save Log Error:", e);
+      console.error("Save Log Error:", e);
+      throw e;
+    }
+  },
+
+  // 4. 管理全域工程師 (利用 prj_Settings)
+  upsertGlobalEngineer: async (eng: GlobalEngineer): Promise<void> => {
+    try {
+      const payload = {
+        Key: `User:${eng.name}`,
+        Value: eng.password, // 密碼存於 Value
+        Description: eng.color // 顏色存於 Description
+      };
+      const { error } = await supabase
+        .from(CONFIG.SUPABASE.TABLES.SETTINGS)
+        .upsert(payload, { onConflict: 'Key' });
+
+      if (error) throw new Error(`Upsert Engineer Error: ${error.message}`);
+    } catch (e) {
+      console.error("Save Engineer Error:", e);
+      throw e;
+    }
+  },
+
+  deleteGlobalEngineer: async (name: string): Promise<void> => {
+    try {
+      const { error } = await supabase
+        .from(CONFIG.SUPABASE.TABLES.SETTINGS)
+        .delete()
+        .eq('Key', `User:${name}`);
+
+      if (error) throw new Error(`Delete Engineer Error: ${error.message}`);
+    } catch (e) {
+      console.error("Delete Engineer Error:", e);
       throw e;
     }
   }

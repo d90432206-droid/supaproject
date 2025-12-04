@@ -5,13 +5,14 @@ import { Dashboard } from './components/Dashboard';
 import { ProjectList } from './components/ProjectList';
 import { WBSEditor } from './components/WBSEditor';
 import { TimeLog } from './components/TimeLog';
-import { SupabaseService } from './services/supabaseService'; // Changed import
-import { Project, Log, LoginData, ViewState } from './types';
+import { SupabaseService } from './services/supabaseService';
+import { Project, Log, LoginData, ViewState, GlobalEngineer } from './types';
 
 function App() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [logs, setLogs] = useState<Log[]>([]);
   const [adminPassword, setAdminPassword] = useState('8888');
+  const [globalEngineers, setGlobalEngineers] = useState<GlobalEngineer[]>([]);
   
   const [currentView, setCurrentView] = useState<ViewState>('dashboard');
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
@@ -23,27 +24,35 @@ function App() {
   });
   const [loginInputPass, setLoginInputPass] = useState('');
 
+  // Admin Engineer Management Modal State
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
+  const [editingEngineer, setEditingEngineer] = useState<Partial<GlobalEngineer>>({});
+  
   // Initial Data Load
   useEffect(() => {
+    loadAllData();
+  }, []);
+
+  const loadAllData = () => {
+    setIsLoading(true);
     SupabaseService.loadData()
       .then(data => {
         setProjects(data.projects);
         setLogs(data.logs);
         setAdminPassword(data.adminPassword);
+        setGlobalEngineers(data.globalEngineers);
         setIsOnline(true);
       })
       .catch(err => {
         console.error("Load failed full error:", err);
         const errorMsg = err instanceof Error ? err.message : JSON.stringify(err);
-        // 若連線失敗，可能是 API Key 或 Table 不存在，顯示清楚的訊息
         if (!isOnline) {
-             // 這裡不使用 alert 避免進入頁面就一直跳窗，僅在 Console 顯示
              console.error("Supabase 連線失敗:", errorMsg);
         }
         setIsOnline(false); 
       })
       .finally(() => setIsLoading(false));
-  }, []);
+  };
 
   const handleLogin = () => {
     if (loginData.role === 'Admin') {
@@ -54,19 +63,24 @@ function App() {
       }
     } else {
       if (!loginData.name.trim()) return alert('請輸入姓名');
-      // Verify engineer exists in at least one project
-      const exists = projects.some(p => p.engineers?.some(e => e.name === loginData.name));
-      if (exists) {
-        setLoginData({ ...loginData, isLoggedIn: true, user: loginData.name });
-      } else {
-        alert('找不到此工程師姓名，請確認您已在專案成員名單中。');
+      
+      // 1. 驗證全域工程師名單
+      const eng = globalEngineers.find(e => e.name === loginData.name);
+      
+      if (!eng) {
+        return alert('找不到此工程師帳號，請聯繫管理員建立。');
       }
+
+      // 2. 驗證密碼
+      if (loginInputPass !== eng.password) {
+        return alert('密碼錯誤');
+      }
+
+      setLoginData({ ...loginData, isLoggedIn: true, user: loginData.name });
     }
   };
 
-  // 修改：不再全量儲存，而是針對單一項目更新
   const handleProjectSave = async (p: Project, isNew: boolean) => {
-    // 1. Optimistic Update (UI 先變)
     let newProjects = [...projects];
     if (isNew) {
       if (newProjects.some(x => x.id === p.id)) return alert('專案編號重複');
@@ -77,12 +91,10 @@ function App() {
     }
     setProjects(newProjects);
 
-    // 2. Call Supabase
     setIsLoading(true);
     try {
         await SupabaseService.upsertProject(p);
     } catch (e: any) {
-        // 顯示可閱讀的錯誤訊息
         const msg = e.message || JSON.stringify(e);
         console.error("Save Project Error:", e);
         
@@ -91,19 +103,16 @@ function App() {
         } else {
             alert('儲存失敗: ' + msg);
         }
-        // 若失敗可能需要還原 State (此處省略複雜還原邏輯)
     } finally {
         setIsLoading(false);
     }
   };
 
   const handleLogSubmit = async (log: Partial<Log>) => {
-    // 準備完整的 Log 物件
     const newLogItem = log.logId 
         ? (log as Log) 
         : { ...log, logId: Date.now() } as Log;
 
-    // 1. Optimistic Update
     let newLogs = [...logs];
     if (log.logId) {
       const idx = newLogs.findIndex(l => l.logId === log.logId);
@@ -113,21 +122,63 @@ function App() {
     }
     setLogs(newLogs);
 
-    // 2. Call Supabase
     setIsLoading(true);
     try {
         await SupabaseService.upsertLog(newLogItem);
     } catch (e: any) {
         const msg = e.message || JSON.stringify(e);
-        console.error("Save Log Error:", e);
-
         if (msg.includes('42501') || msg.includes('row-level security')) {
-            alert('儲存失敗：權限不足 (Code 42501)\n\n請到 Supabase 後台 SQL Editor 執行開啟權限的 SQL 指令。');
+            alert('儲存失敗：權限不足 (Code 42501)');
         } else {
             alert('儲存失敗: ' + msg);
         }
     } finally {
         setIsLoading(false);
+    }
+  };
+
+  // Engineer Management Handlers
+  const handleSaveEngineer = async () => {
+    if (!editingEngineer.name || !editingEngineer.password) return alert('請輸入姓名與密碼');
+    
+    const newEng: GlobalEngineer = {
+        name: editingEngineer.name,
+        password: editingEngineer.password,
+        color: editingEngineer.color || '#3b82f6'
+    };
+
+    // UI Update
+    const exists = globalEngineers.some(e => e.name === newEng.name);
+    let newList = [...globalEngineers];
+    if (exists) {
+        newList = newList.map(e => e.name === newEng.name ? newEng : e);
+    } else {
+        newList.push(newEng);
+    }
+    setGlobalEngineers(newList);
+    setEditingEngineer({}); // Reset form
+
+    // API Update
+    try {
+        await SupabaseService.upsertGlobalEngineer(newEng);
+    } catch (e) {
+        alert('工程師資料儲存失敗');
+        loadAllData(); // Revert on error
+    }
+  };
+
+  const handleDeleteEngineer = async (name: string) => {
+    if (!confirm(`確定要刪除工程師 ${name} 嗎？`)) return;
+
+    // UI Update
+    setGlobalEngineers(globalEngineers.filter(e => e.name !== name));
+
+    // API Update
+    try {
+        await SupabaseService.deleteGlobalEngineer(name);
+    } catch (e) {
+        alert('刪除失敗');
+        loadAllData();
     }
   };
 
@@ -137,7 +188,6 @@ function App() {
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-300">
           <div className="bg-brand-600 p-8 text-center relative overflow-hidden">
              <div className="relative z-10 flex flex-col items-center">
-                 {/* Logo Replacement */}
                  <div className="w-24 h-24 mb-4 bg-white rounded-xl shadow-lg flex items-center justify-center p-2">
                     <img src="/logo.png" alt="Logo" className="w-full h-full object-contain" />
                  </div>
@@ -156,8 +206,8 @@ function App() {
               <div className="mb-6">
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-2">身份選擇</label>
                 <div className="flex bg-slate-100 p-1 rounded-lg">
-                  <button onClick={() => setLoginData({...loginData, role: 'Engineer'})} className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${loginData.role === 'Engineer' ? 'bg-white text-brand-600 shadow-sm' : 'text-slate-400'}`}>工程師</button>
-                  <button onClick={() => setLoginData({...loginData, role: 'Admin'})} className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${loginData.role === 'Admin' ? 'bg-white text-brand-600 shadow-sm' : 'text-slate-400'}`}>管理員</button>
+                  <button onClick={() => { setLoginData({...loginData, role: 'Engineer'}); setLoginInputPass(''); }} className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${loginData.role === 'Engineer' ? 'bg-white text-brand-600 shadow-sm' : 'text-slate-400'}`}>工程師</button>
+                  <button onClick={() => { setLoginData({...loginData, role: 'Admin'}); setLoginInputPass(''); }} className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${loginData.role === 'Admin' ? 'bg-white text-brand-600 shadow-sm' : 'text-slate-400'}`}>管理員</button>
                 </div>
               </div>
               
@@ -169,7 +219,10 @@ function App() {
               ) : (
                 <div className="mb-6 animate-in slide-in-from-left-2 fade-in duration-300">
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-2">工程師姓名</label>
-                  <input type="text" value={loginData.name} onChange={e => setLoginData({...loginData, name: e.target.value})} onKeyDown={e => e.key === 'Enter' && handleLogin()} placeholder="請輸入您的姓名" className="w-full border border-slate-200 rounded-lg px-4 py-3 outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition-all" />
+                  <input type="text" value={loginData.name} onChange={e => setLoginData({...loginData, name: e.target.value})} placeholder="請輸入您的姓名" className="w-full border border-slate-200 rounded-lg px-4 py-3 outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition-all mb-4" />
+                  
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-2">登入密碼</label>
+                  <input type="password" value={loginInputPass} onChange={e => setLoginInputPass(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLogin()} placeholder="請輸入個人密碼" className="w-full border border-slate-200 rounded-lg px-4 py-3 outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition-all font-mono" />
                 </div>
               )}
 
@@ -184,40 +237,114 @@ function App() {
   }
 
   return (
-    <Layout 
-      loginData={loginData} 
-      currentView={currentView} 
-      setView={setCurrentView} 
-      onLogout={() => setLoginData({...loginData, isLoggedIn: false})}
-      isOnline={isOnline}
-      isLoading={isLoading}
-    >
-      {currentView === 'dashboard' && <Dashboard projects={projects} logs={logs} />}
-      {currentView === 'projects' && (
-        <ProjectList 
-          projects={projects} 
-          loginData={loginData} 
-          onSaveProject={handleProjectSave}
-          onOpenWBS={(p) => { setSelectedProject(p); setCurrentView('wbs-editor'); }}
-        />
+    <>
+      <Layout 
+        loginData={loginData} 
+        currentView={currentView} 
+        setView={setCurrentView} 
+        onLogout={() => { setLoginData({...loginData, isLoggedIn: false}); setLoginInputPass(''); }}
+        onOpenAdminPanel={() => setShowAdminPanel(true)}
+        isOnline={isOnline}
+        isLoading={isLoading}
+      >
+        {currentView === 'dashboard' && <Dashboard projects={projects} logs={logs} />}
+        {currentView === 'projects' && (
+          <ProjectList 
+            projects={projects} 
+            loginData={loginData} 
+            onSaveProject={handleProjectSave}
+            onOpenWBS={(p) => { setSelectedProject(p); setCurrentView('wbs-editor'); }}
+          />
+        )}
+        {currentView === 'wbs-editor' && selectedProject && (
+          <WBSEditor 
+            project={selectedProject}
+            globalEngineers={globalEngineers} // Pass global list
+            isAdmin={loginData.role === 'Admin'}
+            onClose={() => setCurrentView('projects')}
+            onUpdate={(updatedP) => handleProjectSave(updatedP, false)}
+          />
+        )}
+        {currentView === 'timelog' && (
+          <TimeLog 
+            projects={projects} 
+            logs={logs} 
+            loginData={loginData} 
+            engineers={globalEngineers} // Pass global list
+            onSubmitLog={handleLogSubmit} 
+          />
+        )}
+      </Layout>
+
+      {/* Admin Member Management Modal */}
+      {showAdminPanel && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[300] flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 max-h-[80vh] flex flex-col">
+                <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-xl font-bold text-slate-800">成員管理 (工程師)</h3>
+                    <button onClick={() => setShowAdminPanel(false)} className="text-slate-400 hover:text-slate-600">
+                        <i className="fa-solid fa-times text-xl"></i>
+                    </button>
+                </div>
+                
+                {/* Form */}
+                <div className="bg-slate-50 p-4 rounded-lg mb-6 border border-slate-200">
+                    <div className="grid grid-cols-2 gap-4 mb-3">
+                        <div>
+                            <label className="text-xs font-bold text-slate-500 uppercase block mb-1">姓名 (ID)</label>
+                            <input value={editingEngineer.name || ''} onChange={e => setEditingEngineer({...editingEngineer, name: e.target.value})} className="w-full border rounded px-3 py-2 text-sm" placeholder="輸入姓名" />
+                        </div>
+                        <div>
+                            <label className="text-xs font-bold text-slate-500 uppercase block mb-1">密碼</label>
+                            <input value={editingEngineer.password || ''} onChange={e => setEditingEngineer({...editingEngineer, password: e.target.value})} className="w-full border rounded px-3 py-2 text-sm font-mono" placeholder="設定密碼" />
+                        </div>
+                    </div>
+                    <div className="mb-3">
+                        <label className="text-xs font-bold text-slate-500 uppercase block mb-1">代表色</label>
+                        <div className="flex gap-2 items-center">
+                            <input type="color" value={editingEngineer.color || '#3b82f6'} onChange={e => setEditingEngineer({...editingEngineer, color: e.target.value})} className="h-9 w-16 cursor-pointer border rounded" />
+                            <span className="text-xs text-slate-400">用於甘特圖顯示</span>
+                        </div>
+                    </div>
+                    <button onClick={handleSaveEngineer} className="w-full bg-brand-600 hover:bg-brand-700 text-white font-bold py-2 rounded text-sm shadow">
+                        <i className="fa-solid fa-plus mr-1"></i> 新增 / 更新成員
+                    </button>
+                </div>
+
+                {/* List */}
+                <div className="flex-1 overflow-y-auto custom-scroll border-t border-slate-100 pt-4">
+                    {globalEngineers.length === 0 ? (
+                        <p className="text-center text-slate-400 text-sm">目前無成員資料</p>
+                    ) : (
+                        <table className="w-full text-sm text-left">
+                            <thead className="text-xs text-slate-500 uppercase bg-white sticky top-0">
+                                <tr>
+                                    <th className="py-2">姓名</th>
+                                    <th className="py-2">密碼</th>
+                                    <th className="py-2">顏色</th>
+                                    <th className="py-2 text-right">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {globalEngineers.map(eng => (
+                                    <tr key={eng.name} className="hover:bg-slate-50">
+                                        <td className="py-2 font-bold text-slate-700">{eng.name}</td>
+                                        <td className="py-2 font-mono text-slate-500">{eng.password}</td>
+                                        <td className="py-2"><div className="w-4 h-4 rounded-full" style={{backgroundColor: eng.color}}></div></td>
+                                        <td className="py-2 text-right flex justify-end gap-2">
+                                            <button onClick={() => setEditingEngineer({...eng})} className="text-brand-600 hover:underline text-xs">編輯</button>
+                                            <button onClick={() => handleDeleteEngineer(eng.name)} className="text-red-500 hover:underline text-xs">刪除</button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    )}
+                </div>
+            </div>
+        </div>
       )}
-      {currentView === 'wbs-editor' && selectedProject && (
-        <WBSEditor 
-          project={selectedProject}
-          isAdmin={loginData.role === 'Admin'}
-          onClose={() => setCurrentView('projects')}
-          onUpdate={(updatedP) => handleProjectSave(updatedP, false)}
-        />
-      )}
-      {currentView === 'timelog' && (
-        <TimeLog 
-          projects={projects} 
-          logs={logs} 
-          loginData={loginData} 
-          onSubmitLog={handleLogSubmit} 
-        />
-      )}
-    </Layout>
+    </>
   );
 }
 

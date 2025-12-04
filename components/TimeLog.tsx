@@ -1,14 +1,16 @@
-import React, { useState, useMemo } from 'react';
-import { Project, Log, LoginData } from '../types';
+
+import React, { useState, useMemo, useEffect } from 'react';
+import { Project, Log, LoginData, GlobalEngineer } from '../types';
 
 interface TimeLogProps {
   projects: Project[];
   logs: Log[];
   loginData: LoginData;
+  engineers: GlobalEngineer[]; // Renamed for clarity, pass global list
   onSubmitLog: (log: Partial<Log>) => void;
 }
 
-export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, onSubmitLog }) => {
+export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, engineers, onSubmitLog }) => {
   const [view, setView] = useState<'input' | 'weekly'>('input');
   const [form, setForm] = useState<Partial<Log>>({
     date: new Date().toISOString().split('T')[0],
@@ -22,10 +24,10 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, onS
 
   const activeProjects = projects.filter(p => p.status === 'Active');
   
-  const availableEngineers = useMemo(() => {
-    if (!form.projectId) return [];
-    return projects.find(p => p.id === form.projectId)?.engineers || [];
-  }, [form.projectId, projects]);
+  // 當專案改變時，清空任務，但「不要」清空工程師 (如果是 Admin，他可能想幫同一個人填多個專案)
+  useEffect(() => {
+    setForm(prev => ({ ...prev, taskId: '' }));
+  }, [form.projectId]);
 
   const projectTasks = useMemo(() => {
     if (!form.projectId) return [];
@@ -120,12 +122,17 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, onS
                             <select 
                               value={form.engineer} 
                               onChange={e => setForm({...form, engineer: e.target.value})} 
-                              disabled={loginData.role === 'Engineer' || !form.projectId}
-                              className="w-full border rounded px-3 py-2 text-sm disabled:bg-slate-100"
+                              // 如果是工程師身分，鎖定為自己。Admin 可選任何人
+                              disabled={loginData.role === 'Engineer'}
+                              className="w-full border rounded px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-600 cursor-pointer disabled:cursor-not-allowed"
                             >
                                 <option value="" disabled>選擇成員</option>
-                                {availableEngineers.map(e => <option key={e.id} value={e.name}>{e.name}</option>)}
+                                {/* 使用全域工程師清單 */}
+                                {engineers.map(e => <option key={e.name} value={e.name}>{e.name}</option>)}
                             </select>
+                            {loginData.role === 'Engineer' && (
+                              <p className="text-[10px] text-slate-400 mt-1"><i className="fa-solid fa-lock mr-1"></i>已鎖定為登入帳號</p>
+                            )}
                         </div>
                         <div>
                             <label className="block text-xs font-bold text-slate-500 uppercase mb-1">任務</label>
@@ -187,6 +194,7 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, onS
          </div>
        ) : (
          <div className="flex flex-col h-full">
+             {/* Weekly View Logic remains same */}
              <div className="flex items-center gap-4 mb-4 bg-white p-3 rounded-lg border border-slate-200 shadow-sm w-fit">
                  <label className="text-xs font-bold text-slate-500 uppercase">基準日:</label>
                  <input type="date" value={weeklyDate} onChange={e => setWeeklyDate(e.target.value)} className="border rounded px-2 py-1 text-sm font-mono" />

@@ -1,19 +1,20 @@
-import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
-import { Project, Task, Engineer } from '../types';
+
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { Project, Task, Engineer, GlobalEngineer } from '../types';
 
 interface WBSEditorProps {
   project: Project;
   onUpdate: (updatedProject: Project) => void;
   onClose: () => void;
   isAdmin: boolean;
+  globalEngineers: GlobalEngineer[]; // New prop
 }
 
 // Helpers
 const addDays = (d: string, n: number) => { const x = new Date(d); x.setDate(x.getDate() + n); return x.toISOString().split('T')[0]; };
 const getDaysDiff = (s: string, e: string) => Math.ceil((new Date(e).getTime() - new Date(s).getTime()) / 86400000);
-const distinctColors = ['#ef4444', '#f97316', '#f59e0b', '#84cc16', '#10b981', '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6', '#d946ef', '#f43f5e'];
 
-export const WBSEditor: React.FC<WBSEditorProps> = ({ project, onUpdate, onClose }) => {
+export const WBSEditor: React.FC<WBSEditorProps> = ({ project, onUpdate, onClose, globalEngineers }) => {
   const [localProject, setLocalProject] = useState<Project>(JSON.parse(JSON.stringify(project)));
   const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>('day');
   const [colWidth, setColWidth] = useState(40);
@@ -166,10 +167,22 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, onUpdate, onClose
     setShowEditModal(false);
   };
 
-  const addEngineer = () => {
-    const newEngineers = [...(localProject.engineers || [])];
-    const color = distinctColors[newEngineers.length % distinctColors.length];
-    newEngineers.push({ id: 'e' + Date.now(), name: '新成員', color });
+  // Toggle engineer in project
+  const toggleProjectEngineer = (globalEng: GlobalEngineer) => {
+    const exists = localProject.engineers.some(e => e.name === globalEng.name);
+    let newEngineers = [...localProject.engineers];
+    
+    if (exists) {
+        // Remove
+        newEngineers = newEngineers.filter(e => e.name !== globalEng.name);
+    } else {
+        // Add
+        newEngineers.push({
+            id: globalEng.name, // Use name as ID for simplicity
+            name: globalEng.name,
+            color: globalEng.color
+        });
+    }
     setLocalProject(prev => ({ ...prev, engineers: newEngineers }));
   };
 
@@ -359,20 +372,32 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, onUpdate, onClose
         </div>
       )}
 
-      {/* Team Modal */}
+      {/* Team Management Modal (Updated for Global List Selection) */}
       {showTeamModal && (
           <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
-                <h3 className="font-bold mb-4">團隊成員管理</h3>
-                <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                    {localProject.engineers.map((eng, idx) => (
-                        <div key={eng.id} className="flex items-center gap-2">
-                            <input type="color" value={eng.color} onChange={e => { const updated = [...localProject.engineers]; updated[idx].color = e.target.value; setLocalProject({...localProject, engineers: updated}); }} className="w-8 h-8 rounded shrink-0 cursor-pointer" />
-                            <input value={eng.name} onChange={e => { const updated = [...localProject.engineers]; updated[idx].name = e.target.value; setLocalProject({...localProject, engineers: updated}); }} className="flex-1 border rounded px-2 py-1 text-sm" />
-                            <button onClick={() => { const updated = localProject.engineers.filter((_, i) => i !== idx); setLocalProject({...localProject, engineers: updated}); }} className="text-red-400"><i className="fa-solid fa-trash"></i></button>
-                        </div>
-                    ))}
-                    <button onClick={addEngineer} className="w-full border border-dashed border-slate-300 py-2 text-slate-400 mt-2 text-xs font-bold">+ 新增成員</button>
+                <h3 className="font-bold mb-4">專案成員設定</h3>
+                <p className="text-xs text-slate-500 mb-4">請勾選此專案的團隊成員，資料來源為全域工程師名單。</p>
+                <div className="space-y-2 max-h-[300px] overflow-y-auto border rounded p-2 bg-slate-50">
+                    {globalEngineers.length === 0 ? (
+                        <div className="text-center text-slate-400 py-4 text-xs">尚無工程師資料，請由管理員至「成員管理」新增。</div>
+                    ) : (
+                        globalEngineers.map((ge) => {
+                            const isSelected = localProject.engineers.some(e => e.name === ge.name);
+                            return (
+                                <label key={ge.name} className="flex items-center gap-3 p-2 bg-white border border-slate-100 rounded hover:bg-slate-50 cursor-pointer">
+                                    <input 
+                                        type="checkbox" 
+                                        checked={isSelected}
+                                        onChange={() => toggleProjectEngineer(ge)}
+                                        className="w-4 h-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                                    />
+                                    <div className="w-4 h-4 rounded-full" style={{backgroundColor: ge.color}}></div>
+                                    <span className="text-sm font-medium text-slate-700">{ge.name}</span>
+                                </label>
+                            );
+                        })
+                    )}
                 </div>
                 <div className="mt-4 text-right"><button onClick={()=>setShowTeamModal(false)} className="bg-brand-600 text-white px-4 py-2 rounded text-xs font-bold">完成</button></div>
             </div>

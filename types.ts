@@ -1,13 +1,21 @@
+
 export interface Engineer {
   id: string;
   name: string;
   color: string;
 }
 
+// 新增全域工程師定義 (包含密碼)
+export interface GlobalEngineer {
+  name: string;
+  password: string;
+  color: string;
+}
+
 export interface Task {
   id: number;
   title: string;
-  assignee: string; // Engineer ID
+  assignee: string; // Engineer ID (matches GlobalEngineer.name or specific ID)
   startDate: string; // YYYY-MM-DD
   duration: number; // Days
   hours: number; // Estimated hours
@@ -56,7 +64,8 @@ export interface LoginData {
 export type ViewState = 'dashboard' | 'projects' | 'wbs-editor' | 'timelog';
 
 export interface BackendData {
-  projects: string; // JSON string
-  logs: string; // JSON string
+  projects: Project[];
+  logs: Log[];
   adminPassword: string;
+  globalEngineers: GlobalEngineer[]; // 新增此欄位
 }
