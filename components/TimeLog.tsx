@@ -21,6 +21,7 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
     note: ''
   });
   const [weeklyDate, setWeeklyDate] = useState(new Date().toISOString().split('T')[0]);
+  const [weeklyProjectFilter, setWeeklyProjectFilter] = useState(''); // 新增：週報表專案篩選
 
   const activeProjects = projects.filter(p => p.status === 'Active');
   
@@ -44,6 +45,7 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
 
   const handleEdit = (log: Log) => {
     setForm({ ...log });
+    setView('input'); // Switch to input view when editing
   };
 
   const handleSubmit = () => {
@@ -80,15 +82,21 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
   const weeklyData = useMemo(() => {
     const days = weekDays.map(d => d.dateStr);
     const rangeLogs = logs.filter(l => l.date >= days[0] && l.date <= days[6]);
+    
+    // 如果有選專案，則過濾
+    const filteredLogs = weeklyProjectFilter 
+        ? rangeLogs.filter(l => l.projectId === weeklyProjectFilter)
+        : rangeLogs;
+
     const grouped: Record<string, { projects: Record<string, Record<string, number>> }> = {}; 
-    rangeLogs.forEach(l => {
+    filteredLogs.forEach(l => {
         if(!grouped[l.engineer]) grouped[l.engineer] = { projects: {} };
         if(!grouped[l.engineer].projects[l.projectId]) grouped[l.engineer].projects[l.projectId] = {};
         const curr = grouped[l.engineer].projects[l.projectId][l.date] || 0;
         grouped[l.engineer].projects[l.projectId][l.date] = curr + l.hours;
     });
     return grouped;
-  }, [logs, weekDays]);
+  }, [logs, weekDays, weeklyProjectFilter]);
 
   return (
     <div className="flex-1 overflow-y-auto p-8 animate-in fade-in flex flex-col">
@@ -194,11 +202,27 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
          </div>
        ) : (
          <div className="flex flex-col h-full">
-             {/* Weekly View Logic remains same */}
-             <div className="flex items-center gap-4 mb-4 bg-white p-3 rounded-lg border border-slate-200 shadow-sm w-fit">
-                 <label className="text-xs font-bold text-slate-500 uppercase">基準日:</label>
-                 <input type="date" value={weeklyDate} onChange={e => setWeeklyDate(e.target.value)} className="border rounded px-2 py-1 text-sm font-mono" />
+             <div className="flex flex-wrap items-center gap-4 mb-4 bg-white p-3 rounded-lg border border-slate-200 shadow-sm w-full md:w-fit">
+                 <div className="flex items-center gap-2">
+                    <label className="text-xs font-bold text-slate-500 uppercase">基準日:</label>
+                    <input type="date" value={weeklyDate} onChange={e => setWeeklyDate(e.target.value)} className="border rounded px-2 py-1 text-sm font-mono" />
+                 </div>
+                 {/* 新增專案篩選 */}
+                 <div className="flex items-center gap-2 border-l pl-4 border-slate-200">
+                    <label className="text-xs font-bold text-slate-500 uppercase">專案篩選:</label>
+                    <select 
+                        value={weeklyProjectFilter} 
+                        onChange={e => setWeeklyProjectFilter(e.target.value)}
+                        className="border rounded px-2 py-1 text-sm max-w-[200px]"
+                    >
+                        <option value="">全部專案</option>
+                        {projects.map(p => (
+                            <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                    </select>
+                 </div>
              </div>
+             
              <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
                 <table className="w-full text-sm text-left">
                     <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b">
@@ -214,7 +238,9 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                        {Object.entries(weeklyData).map(([engName, data]) => (
+                        {Object.keys(weeklyData).length === 0 ? (
+                            <tr><td colSpan={9} className="text-center py-8 text-slate-400">尚無工時資料</td></tr>
+                        ) : Object.entries(weeklyData).map(([engName, data]) => (
                             <React.Fragment key={engName}>
                                 <tr className="bg-slate-50/50">
                                     <td colSpan={9} className="px-4 py-2 font-bold text-slate-800 border-r border-slate-200">
