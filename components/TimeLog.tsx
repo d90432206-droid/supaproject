@@ -63,6 +63,12 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
     });
   };
 
+  // Helper to format project display
+  const getProjectDisplay = (pid: string) => {
+      const p = projects.find(x => x.id === pid);
+      return p ? `${p.id} ${p.name}` : pid;
+  };
+
   // Weekly Data Logic
   const weekDays = useMemo(() => {
       const baseDate = new Date(weeklyDate);
@@ -122,7 +128,9 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
                             <label className="block text-xs font-bold text-slate-500 uppercase mb-1">專案 <span className="text-red-500">*</span></label>
                             <select value={form.projectId} onChange={e => setForm({...form, projectId: e.target.value})} className="w-full border rounded px-3 py-2 text-sm">
                                 <option value="" disabled>選擇專案</option>
-                                {activeProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                {activeProjects.map(p => (
+                                    <option key={p.id} value={p.id}>{p.id} {p.name}</option>
+                                ))}
                             </select>
                         </div>
                         <div>
@@ -181,7 +189,9 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
                                 <tr key={log.logId || idx} className="hover:bg-slate-50">
                                     <td className="px-6 py-3 text-slate-500">{log.date}</td>
                                     <td className="px-6 py-3 font-bold text-slate-700">{log.engineer}</td>
-                                    <td className="px-6 py-3 text-brand-600 font-medium">{projects.find(p => p.id === log.projectId)?.name || log.projectId}</td>
+                                    <td className="px-6 py-3 text-brand-600 font-medium">
+                                        {getProjectDisplay(log.projectId)}
+                                    </td>
                                     <td className="px-6 py-3">
                                         <div className="text-slate-500 text-xs">{log.note}</div>
                                     </td>
@@ -207,7 +217,7 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
                     <label className="text-xs font-bold text-slate-500 uppercase">基準日:</label>
                     <input type="date" value={weeklyDate} onChange={e => setWeeklyDate(e.target.value)} className="border rounded px-2 py-1 text-sm font-mono" />
                  </div>
-                 {/* 新增專案篩選 */}
+                 {/* 專案篩選 */}
                  <div className="flex items-center gap-2 border-l pl-4 border-slate-200">
                     <label className="text-xs font-bold text-slate-500 uppercase">專案篩選:</label>
                     <select 
@@ -217,7 +227,7 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
                     >
                         <option value="">全部專案</option>
                         {projects.map(p => (
-                            <option key={p.id} value={p.id}>{p.name}</option>
+                            <option key={p.id} value={p.id}>{p.id} {p.name}</option>
                         ))}
                     </select>
                  </div>
@@ -249,7 +259,9 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
                                 </tr>
                                 {Object.entries(data.projects).map(([projId, days]) => (
                                     <tr key={projId} className="hover:bg-brand-50/10">
-                                        <td className="px-4 py-2 pl-8 border-r border-slate-200 text-xs text-slate-600 font-medium">{projects.find(p=>p.id===projId)?.name || projId}</td>
+                                        <td className="px-4 py-2 pl-8 border-r border-slate-200 text-xs text-slate-600 font-medium">
+                                            {getProjectDisplay(projId)}
+                                        </td>
                                         {weekDays.map((d, i) => (
                                             <td key={i} className="px-2 py-2 text-center border-r border-slate-100 font-mono text-slate-600">
                                                 {days[d.dateStr] ? <span className="font-bold text-brand-600">{days[d.dateStr]}</span> : <span className="text-slate-200">-</span>}
