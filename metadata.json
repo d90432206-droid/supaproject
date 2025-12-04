@@ -1,0 +1,5 @@
+{
+  "name": "Chuyi System",
+  "description": "A professional Project Management System with WBS, Gantt charts, and Time Logging integrated with Google Sheets.",
+  "requestFramePermissions": []
+}
