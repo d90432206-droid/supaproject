@@ -10,12 +10,12 @@ export const CONFIG = {
     // Supabase Anon Key
     KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZicGRqbnJlbGpoZmdtZGZsZmpsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ3NjY1OTUsImV4cCI6MjA4MDM0MjU5NX0.Ocy7vUZ3tURpPC2t7PQ4062r_zxtVSNehiYN2nT6blQ',
     
-    // 資料表名稱設定 (在此修改以對應資料庫)
+    // 資料表名稱設定 (全面改為小寫以符合 PostgreSQL 標準)
     TABLES: {
-      PROJECTS: 'prj_Projects',
-      LOGS: 'prj_Logs',
-      SETTINGS: 'prj_Settings',
-      MESSAGES: 'prj_Messages'
+      PROJECTS: 'prj_projects',
+      LOGS: 'prj_logs',
+      SETTINGS: 'prj_settings',
+      MESSAGES: 'prj_messages'
     }
   }
 };

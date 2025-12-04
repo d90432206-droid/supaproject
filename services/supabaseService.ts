@@ -3,40 +3,54 @@ import { supabase } from '../supabaseClient';
 import { Project, Log, GlobalEngineer, SystemMessage } from '../types';
 import { CONFIG } from '../config';
 
-// 1. 定義與資料庫完全一致的介面 (大小寫敏感)
+// 1. 定義與資料庫一致的介面 (PostgreSQL 標準為全小寫)
 interface DBProject {
-  ProjectID: string;
-  Name: string;
-  Client: string;
-  BudgetHours: number;
-  Status: string;
-  StartDate: string;
-  EndDate: string | null;
-  Details_JSON: string;
+  projectid: string;
+  name: string;
+  client: string;
+  budgethours: number;
+  status: string;
+  startdate: string;
+  enddate: string | null;
+  details_json: string;
 }
 
 interface DBLog {
-  LogID: string;
-  Date: string;
-  ProjectID: string;
-  Engineer: string;
-  TaskID: string;
-  Hours: number;
-  Note: string;
+  logid: string;
+  date: string;
+  projectid: string;
+  engineer: string;
+  taskid: string;
+  hours: number;
+  note: string;
 }
 
 interface DBSettings {
-  Key: string;
-  Value: string | number; 
-  Description: string;
+  key: string;
+  value: string | number; 
+  description: string;
 }
 
 interface DBMessage {
-  MessageID: string;
-  Content: string;
-  Date: string;
-  Author: string;
+  messageid: string;
+  content: string;
+  date: string;
+  author: string;
 }
+
+// 輔助函式：將物件鍵值轉為小寫 (以防萬一資料庫回傳大寫)
+const normalizeKeys = (obj: any) => {
+  if (Array.isArray(obj)) {
+    return obj.map(item => normalizeKeys(item));
+  }
+  if (obj !== null && typeof obj === 'object') {
+    return Object.keys(obj).reduce((acc, key) => {
+      acc[key.toLowerCase()] = obj[key];
+      return acc;
+    }, {} as any);
+  }
+  return obj;
+};
 
 export const SupabaseService = {
   // 1. 載入所有資料
@@ -46,7 +60,7 @@ export const SupabaseService = {
         supabase.from(CONFIG.SUPABASE.TABLES.PROJECTS).select('*'),
         supabase.from(CONFIG.SUPABASE.TABLES.LOGS).select('*'),
         supabase.from(CONFIG.SUPABASE.TABLES.SETTINGS).select('*'), // 讀取所有設定
-        supabase.from(CONFIG.SUPABASE.TABLES.MESSAGES).select('*').order('Date', { ascending: false }) // 讀取公告
+        supabase.from(CONFIG.SUPABASE.TABLES.MESSAGES).select('*').order('date', { ascending: false }) // 讀取公告
       ]);
 
       if (projRes.error) throw new Error(`Projects Error: ${projRes.error.message}`);
@@ -54,18 +68,24 @@ export const SupabaseService = {
       if (setRes.error) throw new Error(`Settings Error: ${setRes.error.message}`);
       if (msgRes.error) throw new Error(`Messages Error: ${msgRes.error.message}`);
 
+      // 正規化鍵值 (轉小寫)
+      const rawProjects = normalizeKeys(projRes.data) as DBProject[];
+      const rawLogs = normalizeKeys(logRes.data) as DBLog[];
+      const rawSettings = normalizeKeys(setRes.data) as DBSettings[];
+      const rawMessages = normalizeKeys(msgRes.data) as DBMessage[];
+
       // 轉換 Projects
-      const projects: Project[] = (projRes.data as DBProject[]).map(p => {
+      const projects: Project[] = rawProjects.map(p => {
         let details: any = {};
-        try { details = p.Details_JSON ? JSON.parse(p.Details_JSON) : {}; } catch (e) {}
+        try { details = p.details_json ? JSON.parse(p.details_json) : {}; } catch (e) {}
         return {
-          id: p.ProjectID,
-          name: p.Name,
-          client: p.Client,
-          budgetHours: p.BudgetHours,
-          status: p.Status as 'Active' | 'Closed',
-          startDate: p.StartDate,
-          endDate: p.EndDate,
+          id: p.projectid,
+          name: p.name,
+          client: p.client,
+          budgetHours: p.budgethours,
+          status: p.status as 'Active' | 'Closed',
+          startDate: p.startdate,
+          endDate: p.enddate,
           wbs: details.wbs || [],
           engineers: details.engineers || [],
           tasks: details.tasks || [],
@@ -74,39 +94,39 @@ export const SupabaseService = {
       });
 
       // 轉換 Logs
-      const logs: Log[] = (logRes.data as DBLog[]).map(l => ({
-        logId: Number(l.LogID),
-        date: l.Date,
-        projectId: l.ProjectID,
-        engineer: l.Engineer,
-        taskId: l.TaskID,
-        hours: l.Hours,
-        note: l.Note
+      const logs: Log[] = rawLogs.map(l => ({
+        logId: Number(l.logid),
+        date: l.date,
+        projectId: l.projectid,
+        engineer: l.engineer,
+        taskId: l.taskid,
+        hours: l.hours,
+        note: l.note
       }));
 
       // 解析 Settings
       let adminPassword = '8888';
       const globalEngineers: GlobalEngineer[] = [];
 
-      (setRes.data as DBSettings[]).forEach(s => {
-        if (s.Key === 'AdminPassword') {
-          adminPassword = String(s.Value);
-        } else if (s.Key.startsWith('User:')) {
+      rawSettings.forEach(s => {
+        if (s.key === 'AdminPassword') {
+          adminPassword = String(s.value);
+        } else if (s.key.startsWith('User:')) {
           // 解析工程師設定: Key="User:Name", Value="Password", Description="Color"
           globalEngineers.push({
-            name: s.Key.replace('User:', ''),
-            password: String(s.Value),
-            color: s.Description || '#3b82f6'
+            name: s.key.replace('User:', ''),
+            password: String(s.value),
+            color: s.description || '#3b82f6'
           });
         }
       });
 
       // 轉換 Messages
-      const messages: SystemMessage[] = (msgRes.data as DBMessage[]).map(m => ({
-        id: m.MessageID,
-        content: m.Content,
-        date: m.Date,
-        author: m.Author
+      const messages: SystemMessage[] = rawMessages.map(m => ({
+        id: m.messageid,
+        content: m.content,
+        date: m.date,
+        author: m.author
       }));
 
       return { projects, logs, adminPassword, globalEngineers, messages };
@@ -126,20 +146,21 @@ export const SupabaseService = {
       };
       const safeEndDate = project.endDate && project.endDate.trim() !== '' ? project.endDate : null;
 
+      // 使用全小寫欄位
       const payload = {
-        ProjectID: project.id,
-        Name: project.name,
-        Client: project.client || '',
-        BudgetHours: Number(project.budgetHours || 0),
-        Status: project.status,
-        StartDate: project.startDate,
-        EndDate: safeEndDate,
-        Details_JSON: JSON.stringify(detailsObj)
+        projectid: project.id,
+        name: project.name,
+        client: project.client || '',
+        budgethours: Number(project.budgetHours || 0),
+        status: project.status,
+        startdate: project.startDate,
+        enddate: safeEndDate,
+        details_json: JSON.stringify(detailsObj)
       };
 
       const { error } = await supabase
         .from(CONFIG.SUPABASE.TABLES.PROJECTS)
-        .upsert(payload, { onConflict: 'ProjectID' });
+        .upsert(payload, { onConflict: 'projectid' });
 
       if (error) throw new Error(`Upsert Project Error: ${error.message}`);
     } catch (e) {
@@ -152,18 +173,18 @@ export const SupabaseService = {
   upsertLog: async (log: Log): Promise<void> => {
     try {
       const payload = {
-        LogID: String(log.logId),
-        Date: log.date,
-        ProjectID: log.projectId,
-        Engineer: log.engineer,
-        TaskID: String(log.taskId || ''),
-        Hours: Number(log.hours),
-        Note: log.note || ''
+        logid: String(log.logId),
+        date: log.date,
+        projectid: log.projectId,
+        engineer: log.engineer,
+        taskid: String(log.taskId || ''),
+        hours: Number(log.hours),
+        note: log.note || ''
       };
 
       const { error } = await supabase
         .from(CONFIG.SUPABASE.TABLES.LOGS)
-        .upsert(payload, { onConflict: 'LogID' });
+        .upsert(payload, { onConflict: 'logid' });
 
       if (error) throw new Error(`Upsert Log Error: ${error.message}`);
     } catch (e) {
@@ -172,19 +193,18 @@ export const SupabaseService = {
     }
   },
 
-  // 4. 管理全域工程師 (利用 prj_Settings)
+  // 4. 管理全域工程師 (利用 prj_settings)
   upsertGlobalEngineer: async (eng: GlobalEngineer): Promise<void> => {
     try {
       const payload = {
-        Key: `User:${eng.name}`,
-        Value: eng.password, // 密碼存於 Value
-        Description: eng.color // 顏色存於 Description
+        key: `User:${eng.name}`,
+        value: eng.password, 
+        description: eng.color 
       };
       const { error } = await supabase
         .from(CONFIG.SUPABASE.TABLES.SETTINGS)
-        .upsert(payload, { onConflict: 'Key' });
+        .upsert(payload, { onConflict: 'key' });
 
-      // 增強錯誤拋出，包含 Error Code 以利前端判斷 RLS
       if (error) throw new Error(`${error.message} (Code: ${error.code})`);
     } catch (e) {
       console.error("Save Engineer Error:", e);
@@ -197,7 +217,7 @@ export const SupabaseService = {
       const { error } = await supabase
         .from(CONFIG.SUPABASE.TABLES.SETTINGS)
         .delete()
-        .eq('Key', `User:${name}`);
+        .eq('key', `User:${name}`);
 
       if (error) throw new Error(`Delete Engineer Error: ${error.message}`);
     } catch (e) {
@@ -210,14 +230,14 @@ export const SupabaseService = {
   upsertMessage: async (msg: SystemMessage): Promise<void> => {
     try {
       const payload = {
-        MessageID: msg.id,
-        Content: msg.content,
-        Date: msg.date,
-        Author: msg.author
+        messageid: msg.id,
+        content: msg.content,
+        date: msg.date,
+        author: msg.author
       };
       const { error } = await supabase
         .from(CONFIG.SUPABASE.TABLES.MESSAGES)
-        .upsert(payload, { onConflict: 'MessageID' });
+        .upsert(payload, { onConflict: 'messageid' });
 
       if (error) throw new Error(`Upsert Message Error: ${error.message} (Code: ${error.code})`);
     } catch (e) {
@@ -231,7 +251,7 @@ export const SupabaseService = {
       const { error } = await supabase
         .from(CONFIG.SUPABASE.TABLES.MESSAGES)
         .delete()
-        .eq('MessageID', id);
+        .eq('messageid', id);
         
       if (error) throw new Error(`Delete Message Error: ${error.message}`);
     } catch (e) {
