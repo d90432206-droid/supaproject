@@ -1,6 +1,7 @@
 
 import { supabase } from '../supabaseClient';
 import { Project, Log } from '../types';
+import { CONFIG } from '../config';
 
 // 1. 定義與資料庫完全一致的介面 (大小寫敏感)
 interface DBProject {
@@ -34,10 +35,11 @@ export const SupabaseService = {
   // 1. 載入所有資料
   loadData: async (): Promise<{ projects: Project[], logs: Log[], adminPassword: string }> => {
     try {
+      // 使用 CONFIG.SUPABASE.TABLES 取代硬編碼的字串
       const [projRes, logRes, setRes] = await Promise.all([
-        supabase.from('Projects').select('*'),
-        supabase.from('Logs').select('*'),
-        supabase.from('Settings').select('*').eq('Key', 'AdminPassword').single()
+        supabase.from(CONFIG.SUPABASE.TABLES.PROJECTS).select('*'),
+        supabase.from(CONFIG.SUPABASE.TABLES.LOGS).select('*'),
+        supabase.from(CONFIG.SUPABASE.TABLES.SETTINGS).select('*').eq('Key', 'AdminPassword').single()
       ]);
 
       if (projRes.error) {
@@ -85,8 +87,7 @@ export const SupabaseService = {
       // 取得密碼
       let adminPassword = '8888';
       if (setRes.data) {
-        // [修正關鍵] 強制轉為字串 String()
-        // 因為資料庫欄位是 int8 (數字)，但前端比對需要字串
+        // 強制轉為字串 String()
         adminPassword = String((setRes.data as DBSettings).Value); 
       }
 
@@ -120,7 +121,7 @@ export const SupabaseService = {
       };
 
       const { error } = await supabase
-        .from('Projects')
+        .from(CONFIG.SUPABASE.TABLES.PROJECTS) // 使用設定檔中的表格名稱
         .upsert(payload, { onConflict: 'ProjectID' });
 
       if (error) {
@@ -146,7 +147,7 @@ export const SupabaseService = {
       };
 
       const { error } = await supabase
-        .from('Logs')
+        .from(CONFIG.SUPABASE.TABLES.LOGS) // 使用設定檔中的表格名稱
         .upsert(payload, { onConflict: 'LogID' });
 
       if (error) {
