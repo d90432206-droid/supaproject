@@ -84,8 +84,13 @@ function App() {
     } catch (e: any) {
         // 顯示可閱讀的錯誤訊息
         const msg = e.message || JSON.stringify(e);
-        alert('儲存失敗: ' + msg + '\n\n(可能是權限不足，請檢查 Supabase RLS 設定)');
         console.error("Save Project Error:", e);
+        
+        if (msg.includes('42501') || msg.includes('row-level security')) {
+            alert('儲存失敗：權限不足 (Code 42501)\n\n請到 Supabase 後台 SQL Editor 執行開啟權限的 SQL 指令。');
+        } else {
+            alert('儲存失敗: ' + msg);
+        }
         // 若失敗可能需要還原 State (此處省略複雜還原邏輯)
     } finally {
         setIsLoading(false);
@@ -114,8 +119,13 @@ function App() {
         await SupabaseService.upsertLog(newLogItem);
     } catch (e: any) {
         const msg = e.message || JSON.stringify(e);
-        alert('儲存失敗: ' + msg);
         console.error("Save Log Error:", e);
+
+        if (msg.includes('42501') || msg.includes('row-level security')) {
+            alert('儲存失敗：權限不足 (Code 42501)\n\n請到 Supabase 後台 SQL Editor 執行開啟權限的 SQL 指令。');
+        } else {
+            alert('儲存失敗: ' + msg);
+        }
     } finally {
         setIsLoading(false);
     }
