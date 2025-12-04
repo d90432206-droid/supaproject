@@ -57,9 +57,10 @@ export const SupabaseService = {
   loadData: async (): Promise<{ projects: Project[], logs: Log[], adminPassword: string, globalEngineers: GlobalEngineer[], messages: SystemMessage[] }> => {
     try {
       // 修正：加入 .range(0, 9999) 以突破預設 1000 筆的限制
+      // 修正：加入 .order('date', { ascending: false }) 確保優先撈取最新的日報
       const [projRes, logRes, setRes, msgRes] = await Promise.all([
         supabase.from(CONFIG.SUPABASE.TABLES.PROJECTS).select('*').range(0, 9999),
-        supabase.from(CONFIG.SUPABASE.TABLES.LOGS).select('*').range(0, 9999),
+        supabase.from(CONFIG.SUPABASE.TABLES.LOGS).select('*').order('date', { ascending: false }).range(0, 9999),
         supabase.from(CONFIG.SUPABASE.TABLES.SETTINGS).select('*').range(0, 9999), // 讀取所有設定
         supabase.from(CONFIG.SUPABASE.TABLES.MESSAGES).select('*').order('date', { ascending: false }).range(0, 99) // 公告不需要太多
       ]);
