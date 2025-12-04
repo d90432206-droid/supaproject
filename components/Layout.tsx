@@ -28,7 +28,7 @@ export const Layout: React.FC<LayoutProps> = ({
           />
           <div>
             <h1 className="font-bold text-white text-lg tracking-tight leading-tight">Chuyi System</h1>
-            <div className="text-[11px] text-slate-500 font-medium">Project Management</div>
+            <div className="text-[11px] text-slate-500 font-medium">專案管理模組</div>
           </div>
         </div>
 
