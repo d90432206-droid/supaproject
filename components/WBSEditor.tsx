@@ -152,16 +152,18 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
     const days = weekDays.map(d => d.dateStr);
     const safeLogs = logs || [];
     
-    // 修正：使用寬鬆比對 (Includes)
-    // 防止因為資料庫存了 "ID Name" 而專案 ID 只有 "ID" 導致比對失敗
-    const targetId = String(project.id).trim().toLowerCase(); 
+    // 修正：同時比對 ID 與 Name (寬鬆比對)
+    const targetId = String(project.id).trim().toLowerCase();
+    const targetName = String(project.name).trim().toLowerCase();
 
     const rangeLogs = safeLogs.filter(l => {
         const logProjectId = String(l.projectId).trim().toLowerCase();
-        // 只要有一方包含另一方，就算吻合
-        const isMatch = logProjectId.includes(targetId) || targetId.includes(logProjectId);
         
-        return isMatch && l.date >= days[0] && l.date <= days[6];
+        // 只要 log 的 projectId 包含 專案ID 或 專案名稱，或者反過來，都算吻合
+        const isMatchId = targetId && (logProjectId.includes(targetId) || targetId.includes(logProjectId));
+        const isMatchName = targetName && (logProjectId.includes(targetName) || targetName.includes(logProjectId));
+        
+        return (isMatchId || isMatchName) && l.date >= days[0] && l.date <= days[6];
     });
 
     const grouped: Record<string, Record<string, number>> = {}; 
@@ -172,7 +174,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
         grouped[engName][l.date] = curr + l.hours;
     });
     return grouped;
-  }, [logs, weekDays, project.id]);
+  }, [logs, weekDays, project.id, project.name]);
 
   // Drag Handlers
   const handleMouseDown = (task: Task, e: React.MouseEvent) => {
@@ -395,7 +397,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                                 {renderDays.map(d => (
                                     <div key={d.dateStr} className={`h-full border-r border-slate-100 flex flex-col justify-center items-center text-[10px] font-bold text-slate-600 cursor-pointer transition-colors
                                          ${d.isWeekend ? 'bg-orange-200 text-orange-800' : ''} 
-                                         ${d.isHoliday ? '!bg-orange-50 !text-orange-600' : ''}`} 
+                                         ${d.isHoliday ? '!bg-red-100 !text-red-600 border-b-2 border-red-400' : ''}`} 
                                          style={{ width: colWidth }}
                                          onClick={() => {
                                              const newHolidays = d.isHoliday 
@@ -420,7 +422,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                             {renderDays.map(d => (
                                 <div key={`bg-${d.dateStr}`} className={`flex-shrink-0 border-r border-slate-100 h-full box-border 
                                     ${d.isWeekend ? 'bg-orange-200/30' : ''} 
-                                    ${d.isHoliday ? 'bg-orange-50/50' : ''}`} 
+                                    ${d.isHoliday ? 'bg-red-50/50' : ''}`} 
                                     style={{ width: colWidth }}></div>
                             ))}
                         </div>
