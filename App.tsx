@@ -115,6 +115,37 @@ function App() {
     }
   };
 
+  const handleDeleteProjects = async (ids: string[], passwordInput: string): Promise<boolean> => {
+    // 驗證管理員密碼
+    if (passwordInput !== adminPassword) {
+      alert('密碼錯誤，刪除已取消');
+      return false;
+    }
+
+    setIsLoading(true);
+    try {
+      // API Delete
+      await SupabaseService.deleteProjects(ids);
+      
+      // UI Update
+      setProjects(prev => prev.filter(p => !ids.includes(p.id)));
+      
+      // 如果刪除的包含目前選取的，清除選取
+      if (selectedProject && ids.includes(selectedProject.id)) {
+        setSelectedProject(null);
+        setCurrentView('projects');
+      }
+      
+      alert(`成功刪除 ${ids.length} 個專案`);
+      return true;
+    } catch (e: any) {
+      alert('刪除失敗: ' + (e.message || JSON.stringify(e)));
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleLogSubmit = async (log: Partial<Log>) => {
     const newLogItem = log.logId 
         ? (log as Log) 
@@ -318,6 +349,7 @@ function App() {
             projects={projects} 
             loginData={loginData} 
             onSaveProject={handleProjectSave}
+            onDeleteProjects={handleDeleteProjects}
             onOpenWBS={(p) => { setSelectedProject(p); setCurrentView('wbs-editor'); }}
           />
         )}

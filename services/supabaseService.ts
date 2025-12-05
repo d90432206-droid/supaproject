@@ -188,6 +188,21 @@ export const SupabaseService = {
     }
   },
 
+  // 2.1 刪除多個專案
+  deleteProjects: async (projectIds: string[]): Promise<void> => {
+    try {
+      const { error } = await supabase
+        .from(CONFIG.SUPABASE.TABLES.PROJECTS)
+        .delete()
+        .in('projectid', projectIds);
+
+      if (error) throw new Error(`Delete Projects Error: ${error.message}`);
+    } catch (e) {
+      console.error("Delete Projects Error:", e);
+      throw e;
+    }
+  },
+
   // 3. 更新或新增單一日報
   upsertLog: async (log: Log): Promise<void> => {
     try {
