@@ -40,7 +40,10 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
   const [editingTask, setEditingTask] = useState<Partial<Task>>({});
   
   // Statistics State
-  const [statsWeeklyDate, setStatsWeeklyDate] = useState(new Date().toISOString().split('T')[0]);
+  // 修正：預設日期改為專案開始日期，若無則為今天。解決開啟未來專案時統計表空白的問題。
+  const [statsWeeklyDate, setStatsWeeklyDate] = useState(
+      project.startDate ? project.startDate : new Date().toISOString().split('T')[0]
+  );
 
   // Dragging state
   const [draggingState, setDraggingState] = useState<{isDragging: boolean, task: Task | null, startX: number, startDate: string}>({
@@ -152,9 +155,12 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
     const days = weekDays.map(d => d.dateStr);
     const safeLogs = logs || [];
     
-    // 修正：同時比對 ID 與 Name (寬鬆比對 + ID 拆解)
+    // 修正：同時比對 ID 與 Name (雙向 token 比對)
     const targetId = String(project.id).trim().toLowerCase();
     const targetName = String(project.name).trim().toLowerCase();
+    
+    // 將專案資訊拆解成關鍵字 (例如: ["25033", "mmcho"])
+    const projectTokens = [targetId, targetName].flatMap(s => s.split(/[\s,]+/)).filter(Boolean);
 
     const rangeLogs = safeLogs.filter(l => {
         if (!l.projectId) return false;
@@ -170,9 +176,9 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
         if (logProjStr.includes(targetId)) return true;
         if (targetName && logProjStr.includes(targetName)) return true;
 
-        // B. 拆解比對 (Split Match) - 解決 "25033 mmcho" 這種混合格式
-        const parts = logProjStr.split(/[\s,]+/); // Split by space or comma
-        if (parts.some(p => p === targetId)) return true;
+        // B. Token 比對 (只要 Log 中的任何一個字 出現在 專案關鍵字中，就算符合)
+        const logTokens = logProjStr.split(/[\s,]+/).filter(Boolean);
+        if (logTokens.some(token => projectTokens.includes(token))) return true;
 
         return false;
     });
