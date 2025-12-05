@@ -93,6 +93,11 @@ function App() {
     }
     setProjects(newProjects);
 
+    // Fix: Update selectedProject so WBSEditor receives new prop and clears unsaved flag
+    if (selectedProject && selectedProject.id === p.id) {
+        setSelectedProject(p);
+    }
+
     setIsLoading(true);
     try {
         await SupabaseService.upsertProject(p);
@@ -319,7 +324,8 @@ function App() {
         {currentView === 'wbs-editor' && selectedProject && (
           <WBSEditor 
             project={selectedProject}
-            globalEngineers={globalEngineers} // Pass global list
+            logs={logs} // Pass logs for weekly stats
+            globalEngineers={globalEngineers} 
             isAdmin={loginData.role === 'Admin'}
             onClose={() => setCurrentView('projects')}
             onUpdate={(updatedP) => handleProjectSave(updatedP, false)}
@@ -330,7 +336,7 @@ function App() {
             projects={projects} 
             logs={logs} 
             loginData={loginData} 
-            engineers={globalEngineers} // Pass global list
+            engineers={globalEngineers} 
             onSubmitLog={handleLogSubmit} 
           />
         )}

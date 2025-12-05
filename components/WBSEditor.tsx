@@ -63,6 +63,11 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
     return JSON.stringify(localProject) !== JSON.stringify(project);
   }, [localProject, project]);
 
+  // NEW: Sync local state when parent updates project (e.g. save successful)
+  useEffect(() => {
+      setLocalProject(JSON.parse(JSON.stringify(project)));
+  }, [project]);
+
   const handleCloseAttempt = () => {
     if (hasUnsavedChanges) {
       if (window.confirm("您有未儲存的變更，確定要離開嗎？\n\n離開後，未儲存的編輯將會遺失。")) {
@@ -416,7 +421,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                                 {renderDays.map(d => (
                                     <div key={d.dateStr} className={`h-full border-r border-slate-100 flex flex-col justify-center items-center text-[10px] font-bold text-slate-600 cursor-pointer transition-colors
                                          ${d.isWeekend ? 'bg-orange-200 text-orange-800' : ''} 
-                                         ${d.isHoliday ? '!bg-red-100 !text-red-600 border-b-2 border-red-400' : ''}`} 
+                                         ${d.isHoliday ? '!bg-red-100 !text-red-600 border-b-2 border-red-400 !important' : ''}`} 
                                          style={{ width: colWidth }}
                                          onClick={() => {
                                              const newHolidays = d.isHoliday 
