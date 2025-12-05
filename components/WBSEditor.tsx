@@ -152,26 +152,39 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
     const days = weekDays.map(d => d.dateStr);
     const safeLogs = logs || [];
     
-    // 修正：同時比對 ID 與 Name (寬鬆比對)
+    // 修正：同時比對 ID 與 Name (寬鬆比對 + ID 拆解)
     const targetId = String(project.id).trim().toLowerCase();
     const targetName = String(project.name).trim().toLowerCase();
 
     const rangeLogs = safeLogs.filter(l => {
-        const logProjectId = String(l.projectId).trim().toLowerCase();
+        if (!l.projectId) return false;
+
+        // 1. 日期格式統一化 (防止 2025/12/05 vs 2025-12-05 比對失敗)
+        const logDate = String(l.date).replace(/\//g, '-');
+        if (logDate < days[0] || logDate > days[6]) return false;
+
+        // 2. Project ID 匹配邏輯
+        const logProjStr = String(l.projectId).toLowerCase();
         
-        // 只要 log 的 projectId 包含 專案ID 或 專案名稱，或者反過來，都算吻合
-        const isMatchId = targetId && (logProjectId.includes(targetId) || targetId.includes(logProjectId));
-        const isMatchName = targetName && (logProjectId.includes(targetName) || targetName.includes(logProjectId));
-        
-        return (isMatchId || isMatchName) && l.date >= days[0] && l.date <= days[6];
+        // A. 直接包含 (Direct Include)
+        if (logProjStr.includes(targetId)) return true;
+        if (targetName && logProjStr.includes(targetName)) return true;
+
+        // B. 拆解比對 (Split Match) - 解決 "25033 mmcho" 這種混合格式
+        const parts = logProjStr.split(/[\s,]+/); // Split by space or comma
+        if (parts.some(p => p === targetId)) return true;
+
+        return false;
     });
 
     const grouped: Record<string, Record<string, number>> = {}; 
     rangeLogs.forEach(l => {
         const engName = l.engineer || '未指定';
+        // Normalize log date for grouping key as well
+        const dateKey = String(l.date).replace(/\//g, '-');
         if(!grouped[engName]) grouped[engName] = {};
-        const curr = grouped[engName][l.date] || 0;
-        grouped[engName][l.date] = curr + l.hours;
+        const curr = grouped[engName][dateKey] || 0;
+        grouped[engName][dateKey] = curr + l.hours;
     });
     return grouped;
   }, [logs, weekDays, project.id, project.name]);
