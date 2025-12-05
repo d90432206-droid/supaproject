@@ -1,9 +1,10 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Project, Task, Engineer, GlobalEngineer } from '../types';
+import { Project, Task, Engineer, GlobalEngineer, Log } from '../types';
 
 interface WBSEditorProps {
   project: Project;
+  logs: Log[]; // Added logs for statistics
   onUpdate: (updatedProject: Project) => void;
   onClose: () => void;
   isAdmin: boolean;
@@ -14,7 +15,7 @@ interface WBSEditorProps {
 const addDays = (d: string, n: number) => { const x = new Date(d); x.setDate(x.getDate() + n); return x.toISOString().split('T')[0]; };
 const getDaysDiff = (s: string, e: string) => Math.ceil((new Date(e).getTime() - new Date(s).getTime()) / 86400000);
 
-export const WBSEditor: React.FC<WBSEditorProps> = ({ project, onUpdate, onClose, globalEngineers }) => {
+export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, onClose, globalEngineers }) => {
   const [localProject, setLocalProject] = useState<Project>(JSON.parse(JSON.stringify(project)));
   const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>('day');
   const [colWidth, setColWidth] = useState(40);
@@ -23,6 +24,9 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, onUpdate, onClose
   const [showWBSModal, setShowWBSModal] = useState(false);
   const [editingTask, setEditingTask] = useState<Partial<Task>>({});
   
+  // Statistics State
+  const [statsWeeklyDate, setStatsWeeklyDate] = useState(new Date().toISOString().split('T')[0]);
+
   // Dragging state
   const [draggingState, setDraggingState] = useState<{isDragging: boolean, task: Task | null, startX: number, startDate: string}>({
     isDragging: false, task: null, startX: 0, startDate: ''
@@ -35,6 +39,36 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, onUpdate, onClose
 
   const todayDate = new Date().toISOString().split('T')[0];
   const START_OFFSET = 15;
+
+  // --- Dirty Check / Unsaved Changes Logic ---
+  const hasUnsavedChanges = useMemo(() => {
+    // 簡單的深度比對，檢查目前的 localProject 是否與傳入的 project 不同
+    return JSON.stringify(localProject) !== JSON.stringify(project);
+  }, [localProject, project]);
+
+  // 攔截返回按鈕
+  const handleCloseAttempt = () => {
+    if (hasUnsavedChanges) {
+      if (window.confirm("您有未儲存的變更，確定要離開嗎？\n\n離開後，未儲存的編輯將會遺失。")) {
+        onClose();
+      }
+    } else {
+      onClose();
+    }
+  };
+
+  // 攔截瀏覽器重新整理/關閉分頁
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = ''; // Chrome requires this to be set
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedChanges]);
+  // -------------------------------------------
 
   // Render Logic
   const renderDays = useMemo(() => {
@@ -78,6 +112,40 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, onUpdate, onClose
   const renderStart = addDays(localProject.startDate, -START_OFFSET);
   const todayDiff = getDaysDiff(renderStart, todayDate);
   const todayOffset = todayDiff >= 0 ? todayDiff * colWidth : -1;
+
+  // Statistics Logic (Weekly for this project)
+  const weekDays = useMemo(() => {
+    const baseDate = new Date(statsWeeklyDate);
+    const day = baseDate.getDay();
+    const diff = baseDate.getDate() - day + (day === 0 ? -6 : 1); 
+    const monday = new Date(baseDate.setDate(diff));
+    const days = [];
+    const dayNames = ['週一','週二','週三','週四','週五','週六','週日'];
+    for(let i=0; i<7; i++) {
+         const d = new Date(monday);
+         d.setDate(monday.getDate() + i);
+         days.push({ label: dayNames[i], dateStr: d.toISOString().split('T')[0] });
+    }
+    return days;
+  }, [statsWeeklyDate]);
+
+  const weeklyStatsData = useMemo(() => {
+    const days = weekDays.map(d => d.dateStr);
+    // Filter logs for this project and date range
+    const rangeLogs = logs.filter(l => 
+        l.projectId === project.id && 
+        l.date >= days[0] && 
+        l.date <= days[6]
+    );
+
+    const grouped: Record<string, Record<string, number>> = {}; 
+    rangeLogs.forEach(l => {
+        if(!grouped[l.engineer]) grouped[l.engineer] = {};
+        const curr = grouped[l.engineer][l.date] || 0;
+        grouped[l.engineer][l.date] = curr + l.hours;
+    });
+    return grouped;
+  }, [logs, weekDays, project.id]);
 
   // Drag Handlers
   const handleMouseDown = (task: Task, e: React.MouseEvent) => {
@@ -139,6 +207,8 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, onUpdate, onClose
 
   const handleSave = () => {
     onUpdate(localProject);
+    // Note: After onUpdate, parent updates 'project' prop. 
+    // Since localProject === project (structurally) after save/reload, hasUnsavedChanges becomes false.
   };
 
   const openEditModal = (task: Task | null) => {
@@ -224,11 +294,18 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, onUpdate, onClose
         {/* Toolbar */}
         <header className="h-12 bg-white border-b border-slate-200 flex items-center justify-between px-5 shrink-0 shadow-sm z-30">
             <div className="flex items-center gap-3">
-                <button onClick={onClose} className="text-xs font-bold text-slate-500 hover:text-brand-600 flex items-center gap-1">
+                <button onClick={handleCloseAttempt} className="text-xs font-bold text-slate-500 hover:text-brand-600 flex items-center gap-1">
                     <i className="fa-solid fa-arrow-left"></i> 返回
                 </button>
                 <div className="h-4 w-px bg-slate-300 mx-2"></div>
-                <div className="font-bold text-slate-700">{localProject.name} <span className="text-slate-400 font-normal">| WBS 編輯器</span></div>
+                <div className="font-bold text-slate-700 flex items-center gap-2">
+                  {localProject.name} <span className="text-slate-400 font-normal">| WBS 編輯器</span>
+                  {hasUnsavedChanges && (
+                    <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold animate-pulse">
+                      未儲存
+                    </span>
+                  )}
+                </div>
             </div>
             <div className="flex gap-2">
                 <button onClick={() => setShowTeamModal(true)} className="px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-md text-xs font-bold hover:bg-slate-50"><i className="fa-solid fa-users-gear mr-1.5"></i>團隊成員</button>
@@ -239,7 +316,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, onUpdate, onClose
         </header>
 
         {/* Main Gantt Area */}
-        <div id="gantt-export-area" className="flex-1 overflow-hidden bg-[#f8fafc] flex flex-col relative">
+        <div id="gantt-export-area" className="flex-1 overflow-hidden bg-[#f8fafc] flex flex-col relative border-b border-slate-200">
             
             {/* Controls */}
             <div className="px-5 py-4 shrink-0 bg-white border-b border-slate-200 z-20 shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)]">
@@ -322,9 +399,9 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, onUpdate, onClose
                             ))}
                         </div>
 
-                        {/* Today Line */}
+                        {/* Today Line (Z-Index increased to 40) */}
                         {todayOffset >= 0 && (
-                            <div className="absolute top-0 bottom-0 w-[2px] bg-red-500 z-10 pointer-events-none" style={{ left: 260 + todayOffset + (colWidth/2) }}>
+                            <div className="absolute top-0 bottom-0 w-[2px] bg-red-500 z-40 pointer-events-none" style={{ left: 260 + todayOffset + (colWidth/2) }}>
                                 <div className="absolute -top-1 left-1/2 -translate-x-1/2 bg-red-500 text-white text-[9px] px-1 rounded font-bold">TODAY</div>
                             </div>
                         )}
@@ -391,6 +468,56 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, onUpdate, onClose
                     </div>
                 </div>
             </div>
+        </div>
+
+        {/* New Section: Weekly Statistics for Current Project */}
+        <div className="h-48 border-t border-slate-200 bg-white shrink-0 flex flex-col" data-html2canvas-ignore="true">
+             <div className="px-5 py-2 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                 <h4 className="font-bold text-xs text-slate-700 uppercase tracking-wide">
+                     <i className="fa-solid fa-chart-bar mr-2 text-brand-500"></i>本專案每週工時統計
+                 </h4>
+                 <div className="flex items-center gap-2">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase">週次基準日:</label>
+                    <input 
+                        type="date" 
+                        value={statsWeeklyDate} 
+                        onChange={e => setStatsWeeklyDate(e.target.value)} 
+                        className="border rounded px-2 py-1 text-xs font-mono" 
+                    />
+                 </div>
+             </div>
+             <div className="flex-1 overflow-auto custom-scroll p-4">
+                <table className="w-full text-xs text-left">
+                    <thead className="bg-slate-50 text-slate-500 uppercase border-b border-slate-200">
+                        <tr>
+                            <th className="px-3 py-2 border-r border-slate-100">人員</th>
+                            {weekDays.map((d, i) => (
+                                <th key={i} className={`px-2 py-2 text-center border-r border-slate-100 ${i>=5?'bg-slate-100':''}`}>
+                                    {d.label} <span className="text-[9px] block">{d.dateStr.slice(5)}</span>
+                                </th>
+                            ))}
+                            <th className="px-3 py-2 text-right font-bold">總計</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                        {Object.keys(weeklyStatsData).length === 0 ? (
+                            <tr><td colSpan={9} className="text-center py-4 text-slate-400">本週無工時紀錄</td></tr>
+                        ) : Object.entries(weeklyStatsData).map(([eng, dates]) => (
+                            <tr key={eng} className="hover:bg-slate-50">
+                                <td className="px-3 py-2 font-bold text-slate-700 border-r border-slate-100">{eng}</td>
+                                {weekDays.map((d, i) => (
+                                    <td key={i} className="px-2 py-2 text-center border-r border-slate-100 font-mono text-slate-600">
+                                        {dates[d.dateStr] ? <span className="font-bold text-brand-600">{dates[d.dateStr]}</span> : <span className="text-slate-200">-</span>}
+                                    </td>
+                                ))}
+                                <td className="px-3 py-2 text-right font-bold font-mono text-slate-800">
+                                    {Object.values(dates).reduce((a, b) => a + b, 0)}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+             </div>
         </div>
 
         {/* Task Edit Modal */}

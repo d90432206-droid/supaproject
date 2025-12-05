@@ -24,7 +24,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ projects, logs, messages, 
 
   const totalBudget = projects.reduce((sum, p) => sum + (p.budgetHours || 0), 0);
   
-  // 修復：解決浮點數運算誤差，並保留一位小數
   const rawTotalActual = logs.reduce((sum, l) => sum + (l.hours || 0), 0);
   const totalActual = Math.round(rawTotalActual * 10) / 10; 
 
@@ -35,7 +34,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ projects, logs, messages, 
     }).filter(p => p.budgetHours > 0 && p.actualHours > (p.budgetHours * 0.8));
   }, [projects, logs]);
 
-  // 取得資料中所有的年份
   const availableYears = useMemo(() => {
       const years = new Set(logs.map(l => l.date.substring(0, 4)));
       return Array.from(years).sort().reverse();
@@ -51,7 +49,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ projects, logs, messages, 
   }, [projects, logs]);
 
   const pieData = useMemo(() => {
-    // 篩選專案與年份
     let filteredLogs = logs.filter(l => l.date.startsWith(yearFilter));
     
     if (projectFilter) {
@@ -64,6 +61,55 @@ export const Dashboard: React.FC<DashboardProps> = ({ projects, logs, messages, 
     });
     return Object.entries(engHours).map(([name, value]) => ({ name, value: Math.round(value * 10) / 10 }));
   }, [logs, projectFilter, yearFilter]);
+
+  // --- Schedule Overview Logic ---
+  const scheduleTimeline = useMemo(() => {
+    if (activeProjects.length === 0) return { months: [], startMonthDate: new Date() };
+
+    // Find min start and max end date
+    const dates = activeProjects.flatMap(p => [
+        p.startDate ? new Date(p.startDate) : null,
+        p.endDate ? new Date(p.endDate) : null
+    ]).filter(Boolean) as Date[];
+    
+    // Default range if no dates
+    if (dates.length === 0) {
+        dates.push(new Date());
+        dates.push(new Date(new Date().setMonth(new Date().getMonth() + 6)));
+    }
+
+    const minDate = new Date(Math.min(...dates.map(d => d.getTime())));
+    const maxDate = new Date(Math.max(...dates.map(d => d.getTime())));
+
+    // Buffer: -1 month, +2 months
+    const start = new Date(minDate.getFullYear(), minDate.getMonth() - 1, 1);
+    const end = new Date(maxDate.getFullYear(), maxDate.getMonth() + 2, 0);
+
+    const months = [];
+    let current = new Date(start);
+    while (current <= end) {
+        months.push({
+            year: current.getFullYear(),
+            month: current.getMonth() + 1
+        });
+        current.setMonth(current.getMonth() + 1);
+    }
+    return { months, startMonthDate: start, totalMonths: months.length };
+  }, [activeProjects]);
+
+  const getPosition = (dateStr: string | null) => {
+    if (!dateStr) return -1;
+    const date = new Date(dateStr);
+    const start = scheduleTimeline.startMonthDate;
+    const diffTime = date.getTime() - start.getTime();
+    const daysDiff = diffTime / (1000 * 3600 * 24);
+    // 60px per month approx, 2px per day
+    return daysDiff * 2; 
+  };
+  
+  const getTodayPosition = () => {
+      return getPosition(new Date().toISOString().split('T')[0]);
+  };
 
   const handlePublish = () => {
     if(!newMessage.trim()) return;
@@ -89,6 +135,98 @@ export const Dashboard: React.FC<DashboardProps> = ({ projects, logs, messages, 
           <div className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">實際投入總工時</div>
           <div className={`text-3xl font-bold ${totalActual > totalBudget ? 'text-red-500' : 'text-emerald-600'}`}>{totalActual.toLocaleString()} h</div>
         </div>
+      </div>
+
+      {/* NEW SECTION: Active Projects Schedule Overview */}
+      <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden mb-8 flex flex-col">
+          <div className="px-6 py-4 border-b border-slate-100 bg-slate-50">
+              <h3 className="font-bold text-slate-700"><i className="fa-solid fa-calendar-alt mr-2"></i>執行中專案總排程</h3>
+          </div>
+          <div className="overflow-x-auto custom-scroll">
+              <div className="min-w-[1000px] flex">
+                  {/* Left: Project Info Table */}
+                  <div className="w-[300px] flex-shrink-0 border-r border-slate-200 bg-white z-10 sticky left-0 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.1)]">
+                      <div className="h-10 bg-slate-100 border-b border-slate-200 flex items-center px-4 font-bold text-xs text-slate-600">
+                          <div className="w-20">案號</div>
+                          <div className="w-20">客戶</div>
+                          <div className="flex-1">設備名稱</div>
+                      </div>
+                      {activeProjects.map((p, idx) => (
+                          <div key={p.id} className={`h-12 flex items-center px-4 text-xs border-b border-slate-100 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`}>
+                              <div className="w-20 font-mono font-bold text-slate-700 truncate pr-2" title={p.id}>{p.id}</div>
+                              <div className="w-20 text-slate-600 truncate pr-2" title={p.client}>{p.client}</div>
+                              <div className="flex-1 font-medium text-slate-800 truncate" title={p.name}>{p.name}</div>
+                          </div>
+                      ))}
+                  </div>
+
+                  {/* Right: Timeline */}
+                  <div className="flex-1 relative">
+                      {/* Timeline Header */}
+                      <div className="h-10 bg-slate-100 border-b border-slate-200 flex">
+                           {scheduleTimeline.months.map((m, i) => (
+                               <div key={i} className="flex-shrink-0 border-r border-slate-200 flex flex-col justify-center items-center w-[60px]">
+                                   {/* Show Year only on Jan or first col */}
+                                   {(m.month === 1 || i === 0) && (
+                                       <div className="text-[9px] text-slate-400 font-bold leading-none mb-0.5">{m.year}</div>
+                                   )}
+                                   <div className="text-xs font-bold text-slate-600 leading-none">{m.month}</div>
+                               </div>
+                           ))}
+                      </div>
+
+                      {/* Timeline Body */}
+                      <div className="relative">
+                          {/* Grid Lines */}
+                          <div className="absolute inset-0 flex pointer-events-none">
+                              {scheduleTimeline.months.map((_, i) => (
+                                  <div key={i} className="flex-shrink-0 border-r border-slate-100 w-[60px] h-full"></div>
+                              ))}
+                          </div>
+                          
+                          {/* Today Line */}
+                          {getTodayPosition() >= 0 && (
+                              <div className="absolute top-0 bottom-0 w-0 border-l-2 border-red-500 border-dashed z-20 pointer-events-none" 
+                                   style={{ left: `${getTodayPosition()}px` }}>
+                                  <div className="absolute -top-3 -left-1.5 text-red-500"><i className="fa-solid fa-caret-down"></i></div>
+                              </div>
+                          )}
+
+                          {/* Rows */}
+                          {activeProjects.map((p, idx) => {
+                              const startPos = getPosition(p.startDate);
+                              const endPos = getPosition(p.endDate);
+                              return (
+                                  <div key={p.id} className={`h-12 border-b border-slate-100 relative ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`}>
+                                      {/* Start Star */}
+                                      {startPos >= 0 && (
+                                          <div className="absolute top-1/2 -translate-y-1/2 text-slate-400 z-10" style={{ left: `${startPos}px` }}>
+                                              <i className="fa-solid fa-star text-sm"></i>
+                                          </div>
+                                      )}
+                                      
+                                      {/* Connection Line (Optional visual) */}
+                                      {startPos >= 0 && endPos >= 0 && endPos > startPos && (
+                                          <div className="absolute top-1/2 -translate-y-1/2 h-0.5 border-t-2 border-red-400 border-dashed z-0" 
+                                               style={{ left: `${startPos + 10}px`, width: `${endPos - startPos - 10}px` }}></div>
+                                      )}
+
+                                      {/* End Flag & Label */}
+                                      {endPos >= 0 && (
+                                          <div className="absolute top-1/2 -translate-y-1/2 z-10 flex flex-col items-center" style={{ left: `${endPos}px` }}>
+                                              <i className="fa-solid fa-flag text-orange-500 text-sm mb-1"></i>
+                                              <div className="absolute left-3 -top-2 bg-yellow-100 border border-yellow-300 text-[9px] px-1 rounded whitespace-nowrap shadow-sm text-yellow-800 font-bold z-20">
+                                                  預計 {p.endDate}
+                                              </div>
+                                          </div>
+                                      )}
+                                  </div>
+                              );
+                          })}
+                      </div>
+                  </div>
+              </div>
+          </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
@@ -261,7 +399,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ projects, logs, messages, 
           </div>
       </div>
 
-      {/* New Section: Closed Projects Review */}
+      {/* Closed Projects Review */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden mb-8">
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-center lg:justify-between bg-slate-100">
               <h3 className="font-bold text-slate-700">

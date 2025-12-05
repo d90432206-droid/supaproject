@@ -250,30 +250,33 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
                     <tbody className="divide-y divide-slate-100">
                         {Object.keys(weeklyData).length === 0 ? (
                             <tr><td colSpan={9} className="text-center py-8 text-slate-400">尚無工時資料</td></tr>
-                        ) : Object.entries(weeklyData).map(([engName, data]) => (
-                            <React.Fragment key={engName}>
-                                <tr className="bg-slate-50/50">
-                                    <td colSpan={9} className="px-4 py-2 font-bold text-slate-800 border-r border-slate-200">
-                                        <i className="fa-solid fa-user-circle mr-2 text-slate-400"></i>{engName}
-                                    </td>
-                                </tr>
-                                {Object.entries(data.projects).map(([projId, days]) => (
-                                    <tr key={projId} className="hover:bg-brand-50/10">
-                                        <td className="px-4 py-2 pl-8 border-r border-slate-200 text-xs text-slate-600 font-medium">
-                                            {getProjectDisplay(projId)}
-                                        </td>
-                                        {weekDays.map((d, i) => (
-                                            <td key={i} className="px-2 py-2 text-center border-r border-slate-100 font-mono text-slate-600">
-                                                {days[d.dateStr] ? <span className="font-bold text-brand-600">{days[d.dateStr]}</span> : <span className="text-slate-200">-</span>}
-                                            </td>
-                                        ))}
-                                        <td className="px-4 py-2 text-right font-mono font-bold text-slate-800">
-                                            {Object.values(days).reduce((a,b)=>a+b,0)}
+                        ) : Object.entries(weeklyData).map(([engName, data]) => {
+                            const typedData = data as { projects: Record<string, Record<string, number>> };
+                            return (
+                                <React.Fragment key={engName}>
+                                    <tr className="bg-slate-50/50">
+                                        <td colSpan={9} className="px-4 py-2 font-bold text-slate-800 border-r border-slate-200">
+                                            <i className="fa-solid fa-user-circle mr-2 text-slate-400"></i>{engName}
                                         </td>
                                     </tr>
-                                ))}
-                            </React.Fragment>
-                        ))}
+                                    {Object.entries(typedData.projects).map(([projId, days]) => (
+                                        <tr key={projId} className="hover:bg-brand-50/10">
+                                            <td className="px-4 py-2 pl-8 border-r border-slate-200 text-xs text-slate-600 font-medium">
+                                                {getProjectDisplay(projId)}
+                                            </td>
+                                            {weekDays.map((d, i) => (
+                                                <td key={i} className="px-2 py-2 text-center border-r border-slate-100 font-mono text-slate-600">
+                                                    {days[d.dateStr] ? <span className="font-bold text-brand-600">{days[d.dateStr]}</span> : <span className="text-slate-200">-</span>}
+                                                </td>
+                                            ))}
+                                            <td className="px-4 py-2 text-right font-mono font-bold text-slate-800">
+                                                {Object.values(days).reduce((a,b)=>a+b,0)}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </React.Fragment>
+                            );
+                        })}
                     </tbody>
                 </table>
              </div>
