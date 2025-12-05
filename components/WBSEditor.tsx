@@ -151,17 +151,20 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
   const weeklyStatsData = useMemo(() => {
     const days = weekDays.map(d => d.dateStr);
     const safeLogs = logs || [];
+    const targetId = String(project.id).trim(); // 去空白，確保比對正確
+
     const rangeLogs = safeLogs.filter(l => 
-        l.projectId === project.id && 
+        String(l.projectId).trim() === targetId && // 使用較寬鬆的比對
         l.date >= days[0] && 
         l.date <= days[6]
     );
 
     const grouped: Record<string, Record<string, number>> = {}; 
     rangeLogs.forEach(l => {
-        if(!grouped[l.engineer]) grouped[l.engineer] = {};
-        const curr = grouped[l.engineer][l.date] || 0;
-        grouped[l.engineer][l.date] = curr + l.hours;
+        const engName = l.engineer || '未指定';
+        if(!grouped[engName]) grouped[engName] = {};
+        const curr = grouped[engName][l.date] || 0;
+        grouped[engName][l.date] = curr + l.hours;
     });
     return grouped;
   }, [logs, weekDays, project.id]);

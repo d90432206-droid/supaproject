@@ -22,9 +22,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ projects, logs, messages, 
   const activeProjects = projects.filter(p => p.status === 'Active');
   const closedProjects = projects.filter(p => p.status === 'Closed');
 
+  // KPI Calculations
   const totalBudget = projects.reduce((sum, p) => sum + (p.budgetHours || 0), 0);
   
-  const rawTotalActual = logs.reduce((sum, l) => sum + (l.hours || 0), 0);
+  // Create a Set of active project IDs for fast lookup
+  const activeProjectIds = new Set(activeProjects.map(p => p.id));
+  
+  // Calculate Actual Hours ONLY for Active Projects
+  const rawTotalActual = logs
+    .filter(l => activeProjectIds.has(l.projectId))
+    .reduce((sum, l) => sum + (l.hours || 0), 0);
+    
   const totalActual = Math.round(rawTotalActual * 10) / 10; 
 
   const alertProjects = useMemo(() => {
@@ -133,7 +141,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ projects, logs, messages, 
         </div>
         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
           <div className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">實際投入總工時</div>
-          <div className={`text-3xl font-bold ${totalActual > totalBudget ? 'text-red-500' : 'text-emerald-600'}`}>{totalActual.toLocaleString()} h</div>
+          <div className={`text-3xl font-bold ${totalActual > totalBudget ? 'text-red-500' : 'text-emerald-600'}`}>
+              {totalActual.toLocaleString()} h
+              <span className="text-xs text-slate-400 font-normal ml-2 block">(僅計執行中專案)</span>
+          </div>
         </div>
       </div>
 
