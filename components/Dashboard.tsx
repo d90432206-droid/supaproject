@@ -25,7 +25,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ projects, logs, messages, 
   const closedProjects = projects.filter(p => p.status === 'Closed');
 
   // KPI Calculations
-  const totalBudget = projects.reduce((sum, p) => sum + (p.budgetHours || 0), 0);
+  // Fix: Only count budget for Active projects
+  const totalBudget = activeProjects.reduce((sum, p) => sum + (p.budgetHours || 0), 0);
   
   // Create a Set of active project IDs for fast lookup
   const activeProjectIds = new Set(activeProjects.map(p => p.id));

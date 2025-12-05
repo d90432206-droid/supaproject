@@ -422,8 +422,8 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                         
                         {/* Today Line */}
                         {todayOffset >= 0 && (
-                            <div className="absolute top-0 bottom-0 w-px bg-red-500 z-40 pointer-events-none shadow-[0_0_4px_rgba(239,68,68,0.5)]" style={{ left: (window.innerWidth < 768 ? 160 : 260) + todayOffset + (colWidth / 2) }}>
-                                <div className="absolute -top-3 -left-4 bg-red-500 text-white text-[9px] px-1.5 rounded font-bold">TODAY</div>
+                            <div className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-50 pointer-events-none" style={{ left: (window.innerWidth < 768 ? 160 : 260) + todayOffset + (colWidth / 2) }}>
+                                <div className="absolute -top-2.5 -left-1.5 text-red-500"><i className="fa-solid fa-caret-down text-sm"></i></div>
                             </div>
                         )}
 
