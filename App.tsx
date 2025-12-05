@@ -200,7 +200,6 @@ function App() {
     try {
         await SupabaseService.upsertGlobalEngineer(newEng);
     } catch (e: any) {
-        // 修正：不再只顯示「儲存失敗」，而是顯示真正的錯誤訊息
         const msg = e.message || JSON.stringify(e);
         console.error("Save Engineer Full Error:", e);
 
@@ -358,7 +357,7 @@ function App() {
             project={selectedProject}
             logs={logs} // Pass logs for weekly stats
             globalEngineers={globalEngineers} 
-            isAdmin={loginData.role === 'Admin'}
+            loginData={loginData}
             onClose={() => setCurrentView('projects')}
             onUpdate={(updatedP) => handleProjectSave(updatedP, false)}
           />

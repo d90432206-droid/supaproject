@@ -21,7 +21,11 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
     note: ''
   });
   const [weeklyDate, setWeeklyDate] = useState(new Date().toISOString().split('T')[0]);
-  const [weeklyProjectFilter, setWeeklyProjectFilter] = useState(''); 
+  const [weeklyProjectFilter, setWeeklyProjectFilter] = useState('');
+  
+  // History Filters
+  const [historyStartDate, setHistoryStartDate] = useState('');
+  const [historyEndDate, setHistoryEndDate] = useState('');
 
   const activeProjects = projects.filter(p => p.status === 'Active');
   
@@ -36,11 +40,25 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
 
   const sortedLogs = useMemo(() => {
     let filtered = [...logs];
+    
+    // User Role Filter
     if (loginData.role === 'Engineer') {
       filtered = filtered.filter(l => l.engineer === loginData.user);
     }
-    return filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 50);
-  }, [logs, loginData]);
+
+    // Date Range Filter
+    if (historyStartDate) {
+      filtered = filtered.filter(l => l.date >= historyStartDate);
+    }
+    if (historyEndDate) {
+      filtered = filtered.filter(l => l.date <= historyEndDate);
+    }
+
+    // Sort Descending & Limit to 100
+    return filtered
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, 100);
+  }, [logs, loginData, historyStartDate, historyEndDate]);
 
   const handleEdit = (log: Log) => {
     setForm({ ...log });
@@ -63,7 +81,7 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
 
   const getProjectDisplay = (pid: string) => {
       const p = projects.find(x => x.id === pid);
-      return p ? `${p.id} ${p.name}` : pid;
+      return p ? `[${p.id}] ${p.name}` : pid;
   };
 
   const weekDays = useMemo(() => {
@@ -124,7 +142,7 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
                             <select value={form.projectId} onChange={e => setForm({...form, projectId: e.target.value})} className="w-full border rounded px-3 py-2 text-sm">
                                 <option value="" disabled>選擇專案</option>
                                 {activeProjects.map(p => (
-                                    <option key={p.id} value={p.id}>{p.id} {p.name}</option>
+                                    <option key={p.id} value={p.id}>[{p.id}] {p.name}</option>
                                 ))}
                             </select>
                         </div>
@@ -166,6 +184,19 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
             </div>
             <div className="lg:col-span-2">
                 <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+                    {/* Filters */}
+                    <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap gap-4 items-center">
+                        <div className="flex items-center gap-2">
+                            <label className="text-xs font-bold text-slate-500 uppercase">篩選日期:</label>
+                            <input type="date" value={historyStartDate} onChange={e => setHistoryStartDate(e.target.value)} className="border rounded px-2 py-1 text-sm bg-white" />
+                            <span className="text-slate-400">~</span>
+                            <input type="date" value={historyEndDate} onChange={e => setHistoryEndDate(e.target.value)} className="border rounded px-2 py-1 text-sm bg-white" />
+                        </div>
+                        <div className="ml-auto text-xs text-slate-400">
+                            顯示前 100 筆資料
+                        </div>
+                    </div>
+
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm text-left">
                             <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b">
@@ -179,7 +210,9 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
-                                {sortedLogs.map((log, idx) => (
+                                {sortedLogs.length === 0 ? (
+                                    <tr><td colSpan={6} className="text-center py-8 text-slate-400">無符合條件的紀錄</td></tr>
+                                ) : sortedLogs.map((log, idx) => (
                                     <tr key={log.logId || idx} className="hover:bg-slate-50">
                                         <td className="px-6 py-3 text-slate-500 whitespace-nowrap">{log.date}</td>
                                         <td className="px-6 py-3 font-bold text-slate-700 whitespace-nowrap">{log.engineer}</td>
@@ -221,7 +254,7 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
                     >
                         <option value="">全部專案</option>
                         {projects.map(p => (
-                            <option key={p.id} value={p.id}>{p.id} {p.name}</option>
+                            <option key={p.id} value={p.id}>[{p.id}] {p.name}</option>
                         ))}
                     </select>
                  </div>

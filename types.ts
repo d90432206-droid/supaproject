@@ -22,6 +22,7 @@ export interface Task {
   actualHours: number;
   progress: number; // 0-100
   category: string; // WBS Category Name
+  delayReason?: string; // 延遲原因
 }
 
 export interface WBSCategory {
@@ -42,6 +43,7 @@ export interface Project {
   engineers: Engineer[];
   tasks: Task[];
   holidays: string[];
+  manager?: string; // 專案負責人 (Engineer Name)
 }
 
 export interface Log {
@@ -76,5 +78,5 @@ export interface BackendData {
   logs: Log[];
   adminPassword: string;
   globalEngineers: GlobalEngineer[]; 
-  messages: SystemMessage[]; // 新增此欄位
+  messages: SystemMessage[];
 }
