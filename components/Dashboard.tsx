@@ -17,6 +17,8 @@ const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#6366f1'
 export const Dashboard: React.FC<DashboardProps> = ({ projects, logs, messages, loginData, onAddMessage, onDeleteMessage }) => {
   const [projectFilter, setProjectFilter] = useState('');
   const [yearFilter, setYearFilter] = useState(new Date().getFullYear().toString());
+  // 新增：長條圖的篩選狀態 (預設顯示執行中)
+  const [barChartFilter, setBarChartFilter] = useState<'Active' | 'Closed' | 'All'>('Active');
   const [newMessage, setNewMessage] = useState('');
 
   const activeProjects = projects.filter(p => p.status === 'Active');
@@ -47,14 +49,22 @@ export const Dashboard: React.FC<DashboardProps> = ({ projects, logs, messages, 
       return Array.from(years).sort().reverse();
   }, [logs]);
 
+  // 修改：BarData 根據 barChartFilter 進行篩選
   const barData = useMemo(() => {
-    return projects.map(p => ({
+    let targetProjects = projects;
+    if (barChartFilter === 'Active') {
+        targetProjects = projects.filter(p => p.status === 'Active');
+    } else if (barChartFilter === 'Closed') {
+        targetProjects = projects.filter(p => p.status === 'Closed');
+    }
+
+    return targetProjects.map(p => ({
       id: p.id,
       name: p.name,
       budget: p.budgetHours,
       actual: Math.round(logs.filter(l => l.projectId === p.id).reduce((s, l) => s + l.hours, 0) * 10) / 10
     }));
-  }, [projects, logs]);
+  }, [projects, logs, barChartFilter]);
 
   const pieData = useMemo(() => {
     let filteredLogs = logs.filter(l => l.date.startsWith(yearFilter));
@@ -148,7 +158,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ projects, logs, messages, 
         </div>
       </div>
 
-      {/* NEW SECTION: Active Projects Schedule Overview */}
+      {/* Active Projects Schedule Overview */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden mb-8 flex flex-col">
           <div className="px-6 py-4 border-b border-slate-100 bg-slate-50">
               <h3 className="font-bold text-slate-700"><i className="fa-solid fa-calendar-alt mr-2"></i>執行中專案總排程</h3>
@@ -243,10 +253,22 @@ export const Dashboard: React.FC<DashboardProps> = ({ projects, logs, messages, 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         {/* Bar Chart */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col h-[400px]">
-          <h3 className="font-bold text-slate-700 mb-4 flex justify-between items-center">
-            <span>預算 vs 實際 (全專案)</span>
-            <span className="text-xs text-slate-400 font-normal">游標懸停查看詳細專案名稱</span>
-          </h3>
+          <div className="flex justify-between items-center mb-4">
+              <h3 className="font-bold text-slate-700 flex items-center gap-2">
+                預算 vs 實際
+                <span className="text-[10px] text-slate-400 font-normal hidden md:inline">(游標懸停查看詳情)</span>
+              </h3>
+              {/* 新增：長條圖篩選器 */}
+              <select 
+                  value={barChartFilter}
+                  onChange={(e) => setBarChartFilter(e.target.value as 'Active'|'Closed'|'All')}
+                  className="text-xs border border-slate-200 rounded px-2 py-1 bg-slate-50 outline-none focus:border-brand-500"
+              >
+                  <option value="Active">執行中</option>
+                  <option value="Closed">已結案</option>
+                  <option value="All">全部專案</option>
+              </select>
+          </div>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart layout="vertical" data={barData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
               <XAxis type="number" />
