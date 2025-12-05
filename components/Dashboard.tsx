@@ -126,7 +126,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ projects, logs, messages, 
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-8 animate-in fade-in">
+    <div className="flex-1 overflow-y-auto p-4 md:p-8 animate-in fade-in">
       <h2 className="text-2xl font-bold text-slate-800 mb-6">營運總覽</h2>
 
       {/* KPIs */}

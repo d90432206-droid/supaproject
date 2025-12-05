@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Project, LoginData } from '../types';
 
@@ -12,6 +13,7 @@ export const ProjectList: React.FC<ProjectListProps> = ({ projects, loginData, o
   const [showModal, setShowModal] = useState(false);
   const [editingProject, setEditingProject] = useState<Partial<Project>>({});
   const [isNew, setIsNew] = useState(false);
+  const [showClosed, setShowClosed] = useState(false);
 
   const openCreateModal = () => {
     setEditingProject({
@@ -41,18 +43,33 @@ export const ProjectList: React.FC<ProjectListProps> = ({ projects, loginData, o
     setShowModal(false);
   };
 
+  const filteredProjects = projects.filter(p => showClosed ? true : p.status === 'Active');
+
   return (
-    <div className="flex-1 overflow-y-auto p-8 animate-in fade-in">
-      <div className="flex justify-between items-center mb-6">
+    <div className="flex-1 overflow-y-auto p-4 md:p-8 animate-in fade-in">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <h2 className="text-2xl font-bold text-slate-800">專案總表</h2>
-        {loginData.role === 'Admin' && (
-          <button onClick={openCreateModal} className="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md transition-colors">
-            <i className="fa-solid fa-plus mr-2"></i>建立新專案
-          </button>
-        )}
+        <div className="flex items-center gap-4">
+            {/* Filter Toggle */}
+            <label className="flex items-center cursor-pointer select-none">
+                <div className="relative">
+                    <input type="checkbox" className="sr-only" checked={showClosed} onChange={() => setShowClosed(!showClosed)} />
+                    <div className={`block w-10 h-6 rounded-full transition-colors ${showClosed ? 'bg-brand-500' : 'bg-slate-300'}`}></div>
+                    <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${showClosed ? 'transform translate-x-4' : ''}`}></div>
+                </div>
+                <div className="ml-3 text-sm font-bold text-slate-600">顯示已結案</div>
+            </label>
+
+            {loginData.role === 'Admin' && (
+            <button onClick={openCreateModal} className="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md transition-colors flex items-center">
+                <i className="fa-solid fa-plus mr-2"></i><span className="hidden md:inline">建立新專案</span><span className="md:hidden">新增</span>
+            </button>
+            )}
+        </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+      {/* Desktop Table */}
+      <div className="hidden md:block bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
         <table className="w-full text-sm text-left">
           <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b">
             <tr>
@@ -65,7 +82,7 @@ export const ProjectList: React.FC<ProjectListProps> = ({ projects, loginData, o
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {projects.map(p => (
+            {filteredProjects.map(p => (
               <tr key={p.id} className="hover:bg-slate-50 group">
                 <td className="px-6 py-4 font-mono text-slate-500">{p.id}</td>
                 <td className="px-6 py-4 font-bold text-slate-800">{p.name}</td>
@@ -92,6 +109,39 @@ export const ProjectList: React.FC<ProjectListProps> = ({ projects, loginData, o
             ))}
           </tbody>
         </table>
+      </div>
+
+      {/* Mobile Cards */}
+      <div className="md:hidden space-y-4">
+          {filteredProjects.map(p => (
+              <div key={p.id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex flex-col gap-3">
+                  <div className="flex justify-between items-start">
+                      <div>
+                          <div className="text-xs font-mono text-slate-400 mb-1">{p.id}</div>
+                          <h3 className="font-bold text-slate-800 text-lg">{p.name}</h3>
+                          <div className="text-sm text-slate-600">{p.client}</div>
+                      </div>
+                      <span className={`px-2 py-1 rounded-full text-xs font-bold ${p.status === 'Active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                        {p.status === 'Active' ? '進行中' : '已結案'}
+                      </span>
+                  </div>
+                  <div className="flex justify-between items-center border-t border-slate-50 pt-3">
+                      <div className="text-sm text-slate-500">
+                          預算: <span className="font-bold text-slate-800">{p.budgetHours}h</span>
+                      </div>
+                      <div className="flex gap-2">
+                          {loginData.role === 'Admin' && (
+                            <button onClick={() => openEditModal(p)} className="w-8 h-8 rounded-full bg-slate-50 text-slate-500 hover:text-brand-600 flex items-center justify-center">
+                              <i className="fa-solid fa-pen"></i>
+                            </button>
+                          )}
+                          <button onClick={() => onOpenWBS(p)} className="bg-brand-50 text-brand-700 px-3 py-1.5 rounded text-xs font-bold">
+                            WBS
+                          </button>
+                      </div>
+                  </div>
+              </div>
+          ))}
       </div>
 
       {/* Modal */}

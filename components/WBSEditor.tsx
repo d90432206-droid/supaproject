@@ -39,7 +39,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
   const [showWBSModal, setShowWBSModal] = useState(false);
   const [editingTask, setEditingTask] = useState<Partial<Task>>({});
   
-  // Statistics State
+  // Statistics State: Default to project start date if available, else today
   const [statsWeeklyDate, setStatsWeeklyDate] = useState(
       project.startDate ? project.startDate : new Date().toISOString().split('T')[0]
   );
@@ -62,7 +62,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
     return JSON.stringify(localProject) !== JSON.stringify(project);
   }, [localProject, project]);
 
-  // Sync local state when parent updates project
+  // Sync local state when parent updates project (e.g. after save)
   useEffect(() => {
       setLocalProject(JSON.parse(JSON.stringify(project)));
   }, [project]);
@@ -120,7 +120,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
     if (localProject.endDate) {
         duration = getDaysDiff(validStart, localProject.endDate) + START_OFFSET + 30;
     }
-    if (duration > 3650) duration = 365;
+    if (duration > 3650) duration = 365; // Cap at 1 year for performance
     if (duration < 1) duration = 30;
 
     const days = [];
@@ -160,7 +160,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
   const todayDiff = getDaysDiff(renderStart, todayDate);
   const todayOffset = todayDiff >= 0 ? todayDiff * colWidth : -1;
 
-  // Statistics Logic
+  // --- Statistics Logic (Fuzzy Match & Date Fix) ---
   const weekDays = useMemo(() => {
     const baseDate = safeDate(statsWeeklyDate);
     const day = baseDate.getDay();
@@ -180,24 +180,30 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
     const days = weekDays.map(d => d.dateStr);
     const safeLogs = logs || [];
     
+    // Normalize target project tokens (ID + Name)
     const targetId = String(project.id).trim().toLowerCase();
     const targetName = String(project.name).trim().toLowerCase();
-    
-    const projectTokens = [targetId, targetName].flatMap(s => s.split(/[\s,]+/)).filter(Boolean);
+    const projectTokens = [targetId, targetName].join(' ').toLowerCase().split(/[\s,]+/).filter(Boolean);
 
     const rangeLogs = safeLogs.filter(l => {
         if (!l.projectId) return false;
 
+        // 1. Fix Date Format (Convert 2025/12/05 to 2025-12-05)
         const logDate = String(l.date).replace(/\//g, '-');
         if (logDate < days[0] || logDate > days[6]) return false;
 
+        // 2. Token Matching (Bidirectional)
+        // Check if ANY part of the log's ProjectID matches ANY part of this project's ID/Name
         const logProjStr = String(l.projectId).toLowerCase();
+        const logTokens = logProjStr.split(/[\s,]+/).filter(Boolean);
         
+        // Match if log ID contains target ID or Name directly
         if (logProjStr.includes(targetId)) return true;
         if (targetName && logProjStr.includes(targetName)) return true;
 
-        const logTokens = logProjStr.split(/[\s,]+/).filter(Boolean);
-        if (logTokens.some(token => projectTokens.includes(token))) return true;
+        // Match if any token overlaps
+        const hasOverlap = logTokens.some(token => projectTokens.includes(token));
+        if (hasOverlap) return true;
 
         return false;
     });
@@ -205,6 +211,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
     const grouped: Record<string, Record<string, number>> = {}; 
     rangeLogs.forEach(l => {
         const engName = l.engineer || '未指定';
+        // Normalize date for grouping key
         const dateKey = String(l.date).replace(/\//g, '-');
         if(!grouped[engName]) grouped[engName] = {};
         const curr = grouped[engName][dateKey] || 0;
