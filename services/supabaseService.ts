@@ -38,7 +38,7 @@ interface DBMessage {
   author: string;
 }
 
-// 輔助函式：將物件鍵值轉為小寫 (以防萬一資料庫回傳大寫)
+// 輔助函式：將物件鍵值轉為小寫
 const normalizeKeys = (obj: any) => {
   if (Array.isArray(obj)) {
     return obj.map(item => normalizeKeys(item));
@@ -56,12 +56,12 @@ const normalizeKeys = (obj: any) => {
 const fetchAllData = async (table: string, sortCol: string | null = null) => {
   let allData: any[] = [];
   let page = 0;
-  const pageSize = 1000; // 每次讀取 1000 筆
+  const pageSize = 1000; 
   
   while (true) {
     let query = supabase.from(table).select('*');
     
-    // 如果有指定排序，則加入排序條件
+    // 如果有指定排序，則加入排序條件 (新資料在前)
     if (sortCol) {
       query = query.order(sortCol, { ascending: false });
     }
@@ -71,11 +71,11 @@ const fetchAllData = async (table: string, sortCol: string | null = null) => {
     
     if (error) throw new Error(`${table} Fetch Error: ${error.message}`);
     
-    if (!data || data.length === 0) break; // 讀不到資料了，結束
+    if (!data || data.length === 0) break; 
     
     allData = allData.concat(data);
     
-    if (data.length < pageSize) break; // 這次讀不滿 1000 筆，代表是最後一頁了
+    if (data.length < pageSize) break; 
     
     page++;
   }
@@ -84,10 +84,9 @@ const fetchAllData = async (table: string, sortCol: string | null = null) => {
 };
 
 export const SupabaseService = {
-  // 1. 載入所有資料 (使用 fetchAllData 確保讀取完整資料庫)
+  // 1. 載入所有資料
   loadData: async (): Promise<{ projects: Project[], logs: Log[], adminPassword: string, globalEngineers: GlobalEngineer[], messages: SystemMessage[] }> => {
     try {
-      // 平行執行所有讀取
       const [rawProjectsData, rawLogsData, rawSettingsData, rawMessagesData] = await Promise.all([
         fetchAllData(CONFIG.SUPABASE.TABLES.PROJECTS),
         fetchAllData(CONFIG.SUPABASE.TABLES.LOGS, 'date'), // 依照日期排序
@@ -95,13 +94,11 @@ export const SupabaseService = {
         fetchAllData(CONFIG.SUPABASE.TABLES.MESSAGES, 'date')
       ]);
 
-      // 正規化鍵值 (轉小寫)
       const rawProjects = normalizeKeys(rawProjectsData) as DBProject[];
       const rawLogs = normalizeKeys(rawLogsData) as DBLog[];
       const rawSettings = normalizeKeys(rawSettingsData) as DBSettings[];
       const rawMessages = normalizeKeys(rawMessagesData) as DBMessage[];
 
-      // 轉換 Projects
       const projects: Project[] = rawProjects.map(p => {
         let details: any = {};
         try { details = p.details_json ? JSON.parse(p.details_json) : {}; } catch (e) {}
@@ -120,7 +117,6 @@ export const SupabaseService = {
         };
       });
 
-      // 轉換 Logs
       const logs: Log[] = rawLogs.map(l => ({
         logId: Number(l.logid),
         date: l.date,
@@ -131,7 +127,6 @@ export const SupabaseService = {
         note: l.note
       }));
 
-      // 解析 Settings
       let adminPassword = '8888';
       const globalEngineers: GlobalEngineer[] = [];
 
@@ -139,7 +134,6 @@ export const SupabaseService = {
         if (s.key === 'AdminPassword') {
           adminPassword = String(s.value);
         } else if (s.key.startsWith('User:')) {
-          // 解析工程師設定: Key="User:Name", Value="Password", Description="Color"
           globalEngineers.push({
             name: s.key.replace('User:', ''),
             password: String(s.value),
@@ -148,7 +142,6 @@ export const SupabaseService = {
         }
       });
 
-      // 轉換 Messages
       const messages: SystemMessage[] = rawMessages.map(m => ({
         id: m.messageid,
         content: m.content,
@@ -173,7 +166,6 @@ export const SupabaseService = {
       };
       const safeEndDate = project.endDate && project.endDate.trim() !== '' ? project.endDate : null;
 
-      // 使用全小寫欄位
       const payload = {
         projectid: project.id,
         name: project.name,
@@ -220,7 +212,7 @@ export const SupabaseService = {
     }
   },
 
-  // 4. 管理全域工程師 (利用 prj_settings)
+  // 4. 管理全域工程師
   upsertGlobalEngineer: async (eng: GlobalEngineer): Promise<void> => {
     try {
       const payload = {

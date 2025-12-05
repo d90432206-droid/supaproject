@@ -4,16 +4,31 @@ import { Project, Task, Engineer, GlobalEngineer, Log } from '../types';
 
 interface WBSEditorProps {
   project: Project;
-  logs: Log[]; // Added logs for statistics
+  logs: Log[]; 
   onUpdate: (updatedProject: Project) => void;
   onClose: () => void;
   isAdmin: boolean;
   globalEngineers: GlobalEngineer[];
 }
 
-// Helpers
-const addDays = (d: string, n: number) => { const x = new Date(d); x.setDate(x.getDate() + n); return x.toISOString().split('T')[0]; };
-const getDaysDiff = (s: string, e: string) => Math.ceil((new Date(e).getTime() - new Date(s).getTime()) / 86400000);
+// Helpers (Safe versions to prevent crashes)
+const safeDate = (d: string | undefined | null) => {
+    if (!d) return new Date();
+    const date = new Date(d);
+    return isNaN(date.getTime()) ? new Date() : date;
+};
+
+const addDays = (d: string, n: number) => { 
+    const x = safeDate(d); 
+    x.setDate(x.getDate() + n); 
+    return x.toISOString().split('T')[0]; 
+};
+
+const getDaysDiff = (s: string, e: string) => {
+    const d1 = safeDate(s);
+    const d2 = safeDate(e);
+    return Math.ceil((d2.getTime() - d1.getTime()) / 86400000);
+};
 
 export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, onClose, globalEngineers }) => {
   const [localProject, setLocalProject] = useState<Project>(JSON.parse(JSON.stringify(project)));
@@ -42,11 +57,9 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
 
   // --- Dirty Check / Unsaved Changes Logic ---
   const hasUnsavedChanges = useMemo(() => {
-    // 簡單的深度比對，檢查目前的 localProject 是否與傳入的 project 不同
     return JSON.stringify(localProject) !== JSON.stringify(project);
   }, [localProject, project]);
 
-  // 攔截返回按鈕
   const handleCloseAttempt = () => {
     if (hasUnsavedChanges) {
       if (window.confirm("您有未儲存的變更，確定要離開嗎？\n\n離開後，未儲存的編輯將會遺失。")) {
@@ -57,25 +70,31 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
     }
   };
 
-  // 攔截瀏覽器重新整理/關閉分頁
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (hasUnsavedChanges) {
         e.preventDefault();
-        e.returnValue = ''; // Chrome requires this to be set
+        e.returnValue = ''; 
       }
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [hasUnsavedChanges]);
-  // -------------------------------------------
 
   // Render Logic
   const renderDays = useMemo(() => {
-    const start = addDays(localProject.startDate, -START_OFFSET);
-    let duration = 60;
-    if (localProject.endDate) duration = getDaysDiff(localProject.startDate, localProject.endDate) + START_OFFSET + 30;
+    // Defensive coding: ensure valid start date
+    const validStart = localProject.startDate || new Date().toISOString().split('T')[0];
+    const start = addDays(validStart, -START_OFFSET);
     
+    let duration = 60;
+    if (localProject.endDate) {
+        duration = getDaysDiff(validStart, localProject.endDate) + START_OFFSET + 30;
+    }
+    // Limit duration to prevent browser crash on bad dates (e.g. year 2099)
+    if (duration > 3650) duration = 365; // Max 1 year view if calculation goes wrong
+    if (duration < 1) duration = 30;
+
     const days = [];
     for (let i = 0; i < duration; i++) {
       const d = new Date(start); d.setDate(d.getDate() + i);
@@ -109,13 +128,13 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
   }, [renderDays, colWidth]);
 
   const totalContentWidth = renderDays.length * colWidth;
-  const renderStart = addDays(localProject.startDate, -START_OFFSET);
+  const renderStart = addDays(localProject.startDate || todayDate, -START_OFFSET);
   const todayDiff = getDaysDiff(renderStart, todayDate);
   const todayOffset = todayDiff >= 0 ? todayDiff * colWidth : -1;
 
-  // Statistics Logic (Weekly for this project)
+  // Statistics Logic
   const weekDays = useMemo(() => {
-    const baseDate = new Date(statsWeeklyDate);
+    const baseDate = safeDate(statsWeeklyDate);
     const day = baseDate.getDay();
     const diff = baseDate.getDate() - day + (day === 0 ? -6 : 1); 
     const monday = new Date(baseDate.setDate(diff));
@@ -131,8 +150,8 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
 
   const weeklyStatsData = useMemo(() => {
     const days = weekDays.map(d => d.dateStr);
-    // Filter logs for this project and date range
-    const rangeLogs = logs.filter(l => 
+    const safeLogs = logs || [];
+    const rangeLogs = safeLogs.filter(l => 
         l.projectId === project.id && 
         l.date >= days[0] && 
         l.date <= days[6]
@@ -165,7 +184,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
       if (draggingState.isDragging && draggingState.task) {
         const daysDelta = Math.round(tempDragOffsetPx / colWidth);
         if (daysDelta !== 0) {
-          const updatedTasks = localProject.tasks.map(t => {
+          const updatedTasks = (localProject.tasks || []).map(t => {
             if (t.id === draggingState.task!.id) {
               return { ...t, startDate: addDays(draggingState.startDate, daysDelta) };
             }
@@ -189,7 +208,6 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
   }, [draggingState, tempDragOffsetPx, colWidth, localProject.tasks]);
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    // Sync header scroll with body scroll
     if (timelineHeaderRef.current) {
       timelineHeaderRef.current.scrollLeft = e.currentTarget.scrollLeft;
     }
@@ -207,22 +225,20 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
 
   const handleSave = () => {
     onUpdate(localProject);
-    // Note: After onUpdate, parent updates 'project' prop. 
-    // Since localProject === project (structurally) after save/reload, hasUnsavedChanges becomes false.
   };
 
   const openEditModal = (task: Task | null) => {
     if (task) setEditingTask({ ...task });
     else setEditingTask({
       id: undefined, title: '新任務', assignee: localProject.engineers[0]?.id,
-      startDate: localProject.startDate, duration: 5, progress: 0, hours: 8, actualHours: 0,
-      category: localProject.wbs[0]?.name
+      startDate: localProject.startDate || todayDate, duration: 5, progress: 0, hours: 8, actualHours: 0,
+      category: localProject.wbs[0]?.name || 'Default'
     });
     setShowEditModal(true);
   };
 
   const saveTask = () => {
-    let newTasks = [...localProject.tasks];
+    let newTasks = [...(localProject.tasks || [])];
     if (editingTask.id) {
       const idx = newTasks.findIndex(t => t.id === editingTask.id);
       if (idx !== -1) newTasks[idx] = editingTask as Task;
@@ -234,21 +250,18 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
   };
 
   const deleteTask = () => {
-    const newTasks = localProject.tasks.filter(t => t.id !== editingTask.id);
+    const newTasks = (localProject.tasks || []).filter(t => t.id !== editingTask.id);
     setLocalProject(prev => ({ ...prev, tasks: newTasks }));
     setShowEditModal(false);
   };
 
-  // Toggle engineer in project using global list
   const toggleProjectEngineer = (globalEng: GlobalEngineer) => {
-    const exists = localProject.engineers.some(e => e.name === globalEng.name);
-    let newEngineers = [...localProject.engineers];
+    const exists = (localProject.engineers || []).some(e => e.name === globalEng.name);
+    let newEngineers = [...(localProject.engineers || [])];
     
     if (exists) {
-        // Remove
         newEngineers = newEngineers.filter(e => e.name !== globalEng.name);
     } else {
-        // Add
         newEngineers.push({
             id: globalEng.name, 
             name: globalEng.name,
@@ -358,7 +371,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
             {/* Gantt Body */}
             <div className="flex-1 flex flex-col overflow-hidden bg-white relative">
                 
-                {/* Timeline Header (Syncs horizontally, Stickys vertically) */}
+                {/* Timeline Header */}
                 <div className="h-14 bg-slate-50/95 backdrop-blur flex flex-none border-b border-slate-200 z-20">
                     <div className="sticky-left-header w-[260px] flex-shrink-0 border-r border-slate-200 bg-slate-50 flex items-center px-4 font-bold text-xs text-slate-600 uppercase tracking-wide">
                         任務列表 / WBS
@@ -376,8 +389,8 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                                          style={{ width: colWidth }}
                                          onClick={() => {
                                              const newHolidays = d.isHoliday 
-                                                ? localProject.holidays.filter(h => h !== d.dateStr)
-                                                : [...localProject.holidays, d.dateStr];
+                                                ? (localProject.holidays || []).filter(h => h !== d.dateStr)
+                                                : [...(localProject.holidays || []), d.dateStr];
                                              setLocalProject({...localProject, holidays: newHolidays});
                                          }}>
                                         <span className="leading-none">{d.label}</span>
@@ -388,18 +401,18 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                     </div>
                 </div>
 
-                {/* Scrollable Content (Syncs horizontally) */}
+                {/* Scrollable Content */}
                 <div className="flex-1 overflow-auto custom-scroll relative" ref={ganttBodyRef} onScroll={handleScroll}>
                     <div className="relative min-h-full" style={{ width: 260 + totalContentWidth }}>
                         
-                        {/* Grid Lines Background */}
+                        {/* Grid Lines */}
                         <div className="absolute inset-0 flex pointer-events-none z-0 pl-[260px]">
                             {renderDays.map(d => (
                                 <div key={`bg-${d.dateStr}`} className={`flex-shrink-0 border-r border-slate-100 h-full box-border ${d.isWeekend ? 'bg-slate-50/50' : ''} ${d.isHoliday ? 'bg-red-50/30 border-b-2 border-red-500/20' : ''}`} style={{ width: colWidth }}></div>
                             ))}
                         </div>
 
-                        {/* Today Line (Z-Index increased to 40) */}
+                        {/* Today Line (z-40) */}
                         {todayOffset >= 0 && (
                             <div className="absolute top-0 bottom-0 w-[2px] bg-red-500 z-40 pointer-events-none" style={{ left: 260 + todayOffset + (colWidth/2) }}>
                                 <div className="absolute -top-1 left-1/2 -translate-x-1/2 bg-red-500 text-white text-[9px] px-1 rounded font-bold">TODAY</div>
@@ -408,7 +421,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
 
                         {/* Tasks Content */}
                         <div className="relative z-10 pt-1 pb-10">
-                            {localProject.wbs.map(wbs => (
+                            {(localProject.wbs || []).map(wbs => (
                                 <div key={wbs.id}>
                                     {/* WBS Group Header (Sticky) */}
                                     <div className="flex border-y border-slate-200 bg-slate-100 sticky-wbs-header group cursor-pointer hover:bg-slate-200 transition-colors"
@@ -426,10 +439,10 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                                     </div>
 
                                     {/* Task Rows */}
-                                    {!wbs.collapsed && localProject.tasks.filter(t => t.category === wbs.name).map(task => (
+                                    {!wbs.collapsed && (localProject.tasks || []).filter(t => t.category === wbs.name).map(task => (
                                         <div key={task.id} className="flex h-10 border-b border-slate-100 relative group hover:bg-blue-50/30">
                                             
-                                            {/* Sticky Left Column: Task Info */}
+                                            {/* Sticky Left Column */}
                                             <div className="sticky-left-col w-[260px] flex-shrink-0 px-4 flex items-center cursor-pointer border-r border-slate-200 bg-white group-hover:bg-blue-50/30 z-20" onClick={() => openEditModal(task)}>
                                                 <div className="flex flex-col truncate w-full">
                                                     <div className="flex justify-between items-center">
@@ -470,7 +483,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
             </div>
         </div>
 
-        {/* New Section: Weekly Statistics for Current Project */}
+        {/* Weekly Statistics */}
         <div className="h-48 border-t border-slate-200 bg-white shrink-0 flex flex-col" data-html2canvas-ignore="true">
              <div className="px-5 py-2 border-b border-slate-100 flex items-center justify-between bg-slate-50">
                  <h4 className="font-bold text-xs text-slate-700 uppercase tracking-wide">
@@ -520,7 +533,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
              </div>
         </div>
 
-        {/* Task Edit Modal */}
+        {/* Modals omitted for brevity - logic remains same but safer */}
         {showEditModal && (
             <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
                 <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
@@ -531,13 +544,13 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                             <div>
                                 <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">WBS 階段</label>
                                 <select value={editingTask.category} onChange={e => setEditingTask({...editingTask, category: e.target.value})} className="w-full border rounded px-3 py-2 text-sm">
-                                    {localProject.wbs.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                                    {(localProject.wbs || []).map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                                 </select>
                             </div>
                             <div>
                                 <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">負責人</label>
                                 <select value={editingTask.assignee} onChange={e => setEditingTask({...editingTask, assignee: e.target.value})} className="w-full border rounded px-3 py-2 text-sm">
-                                    {localProject.engineers.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                                    {(localProject.engineers || []).map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
                                 </select>
                             </div>
                         </div>
@@ -561,7 +574,6 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
             </div>
         )}
 
-        {/* Team Modal (Global List) */}
         {showTeamModal && (
             <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
                 <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 max-h-[80vh] flex flex-col">
@@ -572,7 +584,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                             <p className="text-center text-slate-400 py-4 text-xs">目前無全域工程師資料</p>
                         ) : (
                             globalEngineers.map(eng => {
-                                const isSelected = localProject.engineers.some(e => e.name === eng.name);
+                                const isSelected = (localProject.engineers || []).some(e => e.name === eng.name);
                                 return (
                                     <label key={eng.name} className={`flex items-center p-2 rounded cursor-pointer hover:bg-slate-50 ${isSelected ? 'bg-brand-50' : ''}`}>
                                         <input 
@@ -593,28 +605,27 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
             </div>
         )}
 
-        {/* WBS Stages Modal */}
         {showWBSModal && (
             <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
                 <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6">
                     <h3 className="font-bold text-lg mb-4 text-slate-800">編輯 WBS 階段</h3>
                     <div className="space-y-2 mb-4">
-                        {localProject.wbs.map((item, index) => (
+                        {(localProject.wbs || []).map((item, index) => (
                             <div key={index} className="flex gap-2">
                                 <input value={item.name} onChange={e => {
-                                    const newWBS = [...localProject.wbs];
+                                    const newWBS = [...(localProject.wbs || [])];
                                     newWBS[index].name = e.target.value;
                                     setLocalProject({...localProject, wbs: newWBS});
                                 }} className="flex-1 border rounded px-2 py-1 text-sm" />
                                 <button onClick={() => {
-                                    const newWBS = [...localProject.wbs];
+                                    const newWBS = [...(localProject.wbs || [])];
                                     newWBS.splice(index, 1);
                                     setLocalProject({...localProject, wbs: newWBS});
                                 }} className="text-red-400 hover:text-red-600"><i className="fa-solid fa-trash"></i></button>
                             </div>
                         ))}
                     </div>
-                    <button onClick={() => setLocalProject({...localProject, wbs: [...localProject.wbs, { id: Date.now(), name: '新階段', collapsed: false }]})} className="w-full border border-dashed border-slate-300 py-2 text-slate-500 text-xs font-bold hover:bg-slate-50 hover:text-brand-600 mb-4">+ 新增階段</button>
+                    <button onClick={() => setLocalProject({...localProject, wbs: [...(localProject.wbs || []), { id: Date.now(), name: '新階段', collapsed: false }]})} className="w-full border border-dashed border-slate-300 py-2 text-slate-500 text-xs font-bold hover:bg-slate-50 hover:text-brand-600 mb-4">+ 新增階段</button>
                     <button onClick={() => setShowWBSModal(false)} className="w-full bg-brand-600 text-white py-2 rounded font-bold text-xs hover:bg-brand-700">完成</button>
                 </div>
             </div>
