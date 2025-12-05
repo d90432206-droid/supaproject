@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { LoginData, ViewState } from '../types';
 
 interface LayoutProps {
@@ -8,7 +8,7 @@ interface LayoutProps {
   currentView: ViewState;
   setView: (view: ViewState) => void;
   onLogout: () => void;
-  onOpenAdminPanel?: () => void; // New Prop
+  onOpenAdminPanel?: () => void;
   isOnline: boolean;
   isLoading: boolean;
 }
@@ -16,10 +16,42 @@ interface LayoutProps {
 export const Layout: React.FC<LayoutProps> = ({ 
   children, loginData, currentView, setView, onLogout, onOpenAdminPanel, isOnline, isLoading 
 }) => {
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  const handleNavClick = (view: ViewState) => {
+    setView(view);
+    setIsSidebarOpen(false); // Close sidebar on mobile after selection
+  };
+
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-screen overflow-hidden bg-slate-50">
+      {/* Mobile Header */}
+      <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-slate-900 text-white flex items-center justify-between px-4 z-50 shadow-md">
+        <div className="flex items-center">
+          <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="text-slate-300 hover:text-white mr-4 p-2">
+            <i className="fa-solid fa-bars text-xl"></i>
+          </button>
+          <span className="font-bold text-lg">Chuyi System</span>
+        </div>
+        <div className="w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center text-xs font-bold">
+            {loginData.user.charAt(0).toUpperCase()}
+        </div>
+      </div>
+
+      {/* Sidebar Backdrop (Mobile only) */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-40 md:hidden backdrop-blur-sm"
+          onClick={() => setIsSidebarOpen(false)}
+        ></div>
+      )}
+
       {/* Sidebar */}
-      <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col shrink-0 transition-all duration-300 relative z-40">
+      <aside className={`
+        fixed md:static inset-y-0 left-0 z-50 w-64 bg-slate-900 text-slate-300 flex flex-col shrink-0 transition-transform duration-300 transform 
+        ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} 
+        md:translate-x-0 shadow-xl md:shadow-none
+      `}>
         <div className="h-20 flex items-center px-6 border-b border-slate-800">
           <img 
             src="/logo.png" 
@@ -46,30 +78,30 @@ export const Layout: React.FC<LayoutProps> = ({
           </div>
         </div>
 
-        <nav className="flex-1 py-6 space-y-1">
+        <nav className="flex-1 py-6 space-y-1 overflow-y-auto">
           <NavItem 
             icon="fa-chart-pie" 
             label="營運儀表板" 
             isActive={currentView === 'dashboard'} 
-            onClick={() => setView('dashboard')} 
+            onClick={() => handleNavClick('dashboard')} 
           />
           <NavItem 
             icon="fa-folder-tree" 
             label="專案與 WBS" 
             isActive={currentView === 'projects' || currentView === 'wbs-editor'} 
-            onClick={() => setView('projects')} 
+            onClick={() => handleNavClick('projects')} 
           />
           <NavItem 
             icon="fa-stopwatch" 
             label="工時日報表" 
             isActive={currentView === 'timelog'} 
-            onClick={() => setView('timelog')} 
+            onClick={() => handleNavClick('timelog')} 
           />
           
           {/* Admin Only Button */}
           {loginData.role === 'Admin' && (
             <div className="mt-6 px-6">
-              <button onClick={onOpenAdminPanel} className="w-full border border-slate-700 hover:bg-slate-800 text-slate-400 hover:text-white transition-colors py-2 rounded text-xs font-bold flex items-center justify-center">
+              <button onClick={() => { onOpenAdminPanel?.(); setIsSidebarOpen(false); }} className="w-full border border-slate-700 hover:bg-slate-800 text-slate-400 hover:text-white transition-colors py-2 rounded text-xs font-bold flex items-center justify-center">
                 <i className="fa-solid fa-users-gear mr-2"></i> 成員管理
               </button>
             </div>
@@ -93,7 +125,7 @@ export const Layout: React.FC<LayoutProps> = ({
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col overflow-hidden bg-slate-50 relative">
+      <main className="flex-1 flex flex-col overflow-hidden bg-slate-50 relative w-full pt-16 md:pt-0">
         {children}
       </main>
     </div>

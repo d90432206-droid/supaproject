@@ -6,7 +6,7 @@ interface TimeLogProps {
   projects: Project[];
   logs: Log[];
   loginData: LoginData;
-  engineers: GlobalEngineer[]; // Renamed for clarity, pass global list
+  engineers: GlobalEngineer[]; 
   onSubmitLog: (log: Partial<Log>) => void;
 }
 
@@ -21,11 +21,10 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
     note: ''
   });
   const [weeklyDate, setWeeklyDate] = useState(new Date().toISOString().split('T')[0]);
-  const [weeklyProjectFilter, setWeeklyProjectFilter] = useState(''); // 新增：週報表專案篩選
+  const [weeklyProjectFilter, setWeeklyProjectFilter] = useState(''); 
 
   const activeProjects = projects.filter(p => p.status === 'Active');
   
-  // 當專案改變時，清空任務，但「不要」清空工程師 (如果是 Admin，他可能想幫同一個人填多個專案)
   useEffect(() => {
     setForm(prev => ({ ...prev, taskId: '' }));
   }, [form.projectId]);
@@ -45,13 +44,12 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
 
   const handleEdit = (log: Log) => {
     setForm({ ...log });
-    setView('input'); // Switch to input view when editing
+    setView('input'); 
   };
 
   const handleSubmit = () => {
     if (!form.projectId || !form.engineer || !form.hours) return alert("請填寫完整資訊");
     onSubmitLog(form);
-    // Reset
     setForm({
       date: new Date().toISOString().split('T')[0],
       hours: 1,
@@ -63,13 +61,11 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
     });
   };
 
-  // Helper to format project display
   const getProjectDisplay = (pid: string) => {
       const p = projects.find(x => x.id === pid);
       return p ? `${p.id} ${p.name}` : pid;
   };
 
-  // Weekly Data Logic
   const weekDays = useMemo(() => {
       const baseDate = new Date(weeklyDate);
       const day = baseDate.getDay();
@@ -89,7 +85,6 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
     const days = weekDays.map(d => d.dateStr);
     const rangeLogs = logs.filter(l => l.date >= days[0] && l.date <= days[6]);
     
-    // 如果有選專案，則過濾
     const filteredLogs = weeklyProjectFilter 
         ? rangeLogs.filter(l => l.projectId === weeklyProjectFilter)
         : rangeLogs;
@@ -105,12 +100,12 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
   }, [logs, weekDays, weeklyProjectFilter]);
 
   return (
-    <div className="flex-1 overflow-y-auto p-8 animate-in fade-in flex flex-col">
-       <div className="flex justify-between items-center mb-6 shrink-0">
+    <div className="flex-1 overflow-y-auto p-4 md:p-8 animate-in fade-in flex flex-col">
+       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 shrink-0 gap-4 md:gap-0">
           <h2 className="text-2xl font-bold text-slate-800">工時日報表</h2>
-          <div className="flex bg-white p-1 rounded-lg border border-slate-200 shadow-sm">
-              <button onClick={() => setView('input')} className={`px-4 py-1.5 rounded text-sm font-bold transition-all ${view==='input' ? 'bg-slate-800 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}>日報輸入</button>
-              <button onClick={() => setView('weekly')} className={`px-4 py-1.5 rounded text-sm font-bold transition-all ${view==='weekly' ? 'bg-slate-800 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}>週工時統計</button>
+          <div className="flex flex-wrap bg-white p-1 rounded-lg border border-slate-200 shadow-sm w-full md:w-auto">
+              <button onClick={() => setView('input')} className={`flex-1 md:flex-none px-4 py-1.5 rounded text-sm font-bold transition-all ${view==='input' ? 'bg-slate-800 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}>日報輸入</button>
+              <button onClick={() => setView('weekly')} className={`flex-1 md:flex-none px-4 py-1.5 rounded text-sm font-bold transition-all ${view==='weekly' ? 'bg-slate-800 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}>週工時統計</button>
           </div>
        </div>
 
@@ -138,12 +133,10 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
                             <select 
                               value={form.engineer} 
                               onChange={e => setForm({...form, engineer: e.target.value})} 
-                              // 如果是工程師身分，鎖定為自己。Admin 可選任何人
                               disabled={loginData.role === 'Engineer'}
                               className="w-full border rounded px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-600 cursor-pointer disabled:cursor-not-allowed"
                             >
                                 <option value="" disabled>選擇成員</option>
-                                {/* 使用全域工程師清單 */}
                                 {engineers.map(e => <option key={e.name} value={e.name}>{e.name}</option>)}
                             </select>
                             {loginData.role === 'Engineer' && (
@@ -173,40 +166,42 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
             </div>
             <div className="lg:col-span-2">
                 <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-                    <table className="w-full text-sm text-left">
-                        <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b">
-                            <tr>
-                                <th className="px-6 py-3">日期</th>
-                                <th className="px-6 py-3">人員</th>
-                                <th className="px-6 py-3">專案</th>
-                                <th className="px-6 py-3">任務/備註</th>
-                                <th className="px-6 py-3 text-right">時數</th>
-                                <th className="px-6 py-3 text-right">操作</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                            {sortedLogs.map((log, idx) => (
-                                <tr key={log.logId || idx} className="hover:bg-slate-50">
-                                    <td className="px-6 py-3 text-slate-500">{log.date}</td>
-                                    <td className="px-6 py-3 font-bold text-slate-700">{log.engineer}</td>
-                                    <td className="px-6 py-3 text-brand-600 font-medium">
-                                        {getProjectDisplay(log.projectId)}
-                                    </td>
-                                    <td className="px-6 py-3">
-                                        <div className="text-slate-500 text-xs">{log.note}</div>
-                                    </td>
-                                    <td className="px-6 py-3 text-right font-mono font-bold">{log.hours}</td>
-                                    <td className="px-6 py-3 text-right">
-                                        {(loginData.role === 'Admin' || log.engineer === loginData.user) && (
-                                            <button onClick={() => handleEdit(log)} className="text-slate-400 hover:text-brand-600">
-                                                <i className="fa-solid fa-pen"></i>
-                                            </button>
-                                        )}
-                                    </td>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm text-left">
+                            <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b">
+                                <tr>
+                                    <th className="px-6 py-3 whitespace-nowrap">日期</th>
+                                    <th className="px-6 py-3 whitespace-nowrap">人員</th>
+                                    <th className="px-6 py-3 whitespace-nowrap">專案</th>
+                                    <th className="px-6 py-3 min-w-[150px]">任務/備註</th>
+                                    <th className="px-6 py-3 text-right whitespace-nowrap">時數</th>
+                                    <th className="px-6 py-3 text-right whitespace-nowrap">操作</th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {sortedLogs.map((log, idx) => (
+                                    <tr key={log.logId || idx} className="hover:bg-slate-50">
+                                        <td className="px-6 py-3 text-slate-500 whitespace-nowrap">{log.date}</td>
+                                        <td className="px-6 py-3 font-bold text-slate-700 whitespace-nowrap">{log.engineer}</td>
+                                        <td className="px-6 py-3 text-brand-600 font-medium whitespace-nowrap">
+                                            {getProjectDisplay(log.projectId)}
+                                        </td>
+                                        <td className="px-6 py-3">
+                                            <div className="text-slate-500 text-xs break-words">{log.note}</div>
+                                        </td>
+                                        <td className="px-6 py-3 text-right font-mono font-bold">{log.hours}</td>
+                                        <td className="px-6 py-3 text-right">
+                                            {(loginData.role === 'Admin' || log.engineer === loginData.user) && (
+                                                <button onClick={() => handleEdit(log)} className="text-slate-400 hover:text-brand-600">
+                                                    <i className="fa-solid fa-pen"></i>
+                                                </button>
+                                            )}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
          </div>
@@ -214,16 +209,15 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
          <div className="flex flex-col h-full">
              <div className="flex flex-wrap items-center gap-4 mb-4 bg-white p-3 rounded-lg border border-slate-200 shadow-sm w-full md:w-fit">
                  <div className="flex items-center gap-2">
-                    <label className="text-xs font-bold text-slate-500 uppercase">基準日:</label>
+                    <label className="text-xs font-bold text-slate-500 uppercase whitespace-nowrap">基準日:</label>
                     <input type="date" value={weeklyDate} onChange={e => setWeeklyDate(e.target.value)} className="border rounded px-2 py-1 text-sm font-mono" />
                  </div>
-                 {/* 專案篩選 */}
                  <div className="flex items-center gap-2 border-l pl-4 border-slate-200">
-                    <label className="text-xs font-bold text-slate-500 uppercase">專案篩選:</label>
+                    <label className="text-xs font-bold text-slate-500 uppercase whitespace-nowrap">專案篩選:</label>
                     <select 
                         value={weeklyProjectFilter} 
                         onChange={e => setWeeklyProjectFilter(e.target.value)}
-                        className="border rounded px-2 py-1 text-sm max-w-[200px]"
+                        className="border rounded px-2 py-1 text-sm max-w-[150px] md:max-w-[200px]"
                     >
                         <option value="">全部專案</option>
                         {projects.map(p => (
@@ -234,51 +228,53 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
              </div>
              
              <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-                <table className="w-full text-sm text-left">
-                    <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b">
-                        <tr>
-                            <th className="px-4 py-3 border-r border-slate-200 w-48">工程師 / 專案</th>
-                            {weekDays.map((d, i) => (
-                                <th key={i} className={`px-2 py-3 text-center border-r border-slate-100 ${i>=5?'bg-slate-100':''}`}>
-                                    <div>{d.label}</div>
-                                    <div className="text-[9px]">{d.dateStr.slice(5)}</div>
-                                </th>
-                            ))}
-                            <th className="px-4 py-3 text-right font-bold bg-slate-50">總計</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                        {Object.keys(weeklyData).length === 0 ? (
-                            <tr><td colSpan={9} className="text-center py-8 text-slate-400">尚無工時資料</td></tr>
-                        ) : Object.entries(weeklyData).map(([engName, data]) => {
-                            const typedData = data as { projects: Record<string, Record<string, number>> };
-                            return (
-                                <React.Fragment key={engName}>
-                                    <tr className="bg-slate-50/50">
-                                        <td colSpan={9} className="px-4 py-2 font-bold text-slate-800 border-r border-slate-200">
-                                            <i className="fa-solid fa-user-circle mr-2 text-slate-400"></i>{engName}
-                                        </td>
-                                    </tr>
-                                    {Object.entries(typedData.projects).map(([projId, days]) => (
-                                        <tr key={projId} className="hover:bg-brand-50/10">
-                                            <td className="px-4 py-2 pl-8 border-r border-slate-200 text-xs text-slate-600 font-medium">
-                                                {getProjectDisplay(projId)}
-                                            </td>
-                                            {weekDays.map((d, i) => (
-                                                <td key={i} className="px-2 py-2 text-center border-r border-slate-100 font-mono text-slate-600">
-                                                    {days[d.dateStr] ? <span className="font-bold text-brand-600">{days[d.dateStr]}</span> : <span className="text-slate-200">-</span>}
-                                                </td>
-                                            ))}
-                                            <td className="px-4 py-2 text-right font-mono font-bold text-slate-800">
-                                                {Object.values(days).reduce((a,b)=>a+b,0)}
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left min-w-[800px]">
+                        <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b">
+                            <tr>
+                                <th className="px-4 py-3 border-r border-slate-200 w-48">工程師 / 專案</th>
+                                {weekDays.map((d, i) => (
+                                    <th key={i} className={`px-2 py-3 text-center border-r border-slate-100 ${i>=5?'bg-slate-100':''}`}>
+                                        <div>{d.label}</div>
+                                        <div className="text-[9px]">{d.dateStr.slice(5)}</div>
+                                    </th>
+                                ))}
+                                <th className="px-4 py-3 text-right font-bold bg-slate-50">總計</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                            {Object.keys(weeklyData).length === 0 ? (
+                                <tr><td colSpan={9} className="text-center py-8 text-slate-400">尚無工時資料</td></tr>
+                            ) : Object.entries(weeklyData).map(([engName, data]) => {
+                                const typedData = data as { projects: Record<string, Record<string, number>> };
+                                return (
+                                    <React.Fragment key={engName}>
+                                        <tr className="bg-slate-50/50">
+                                            <td colSpan={9} className="px-4 py-2 font-bold text-slate-800 border-r border-slate-200">
+                                                <i className="fa-solid fa-user-circle mr-2 text-slate-400"></i>{engName}
                                             </td>
                                         </tr>
-                                    ))}
-                                </React.Fragment>
-                            );
-                        })}
-                    </tbody>
-                </table>
+                                        {Object.entries(typedData.projects).map(([projId, days]) => (
+                                            <tr key={projId} className="hover:bg-brand-50/10">
+                                                <td className="px-4 py-2 pl-8 border-r border-slate-200 text-xs text-slate-600 font-medium whitespace-nowrap">
+                                                    {getProjectDisplay(projId)}
+                                                </td>
+                                                {weekDays.map((d, i) => (
+                                                    <td key={i} className="px-2 py-2 text-center border-r border-slate-100 font-mono text-slate-600">
+                                                        {days[d.dateStr] ? <span className="font-bold text-brand-600">{days[d.dateStr]}</span> : <span className="text-slate-200">-</span>}
+                                                    </td>
+                                                ))}
+                                                <td className="px-4 py-2 text-right font-mono font-bold text-slate-800">
+                                                    {Object.values(days).reduce((a,b)=>a+b,0)}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </React.Fragment>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
              </div>
          </div>
        )}
