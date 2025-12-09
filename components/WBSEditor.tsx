@@ -300,13 +300,44 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
   };
 
   // Modals
+
+  const handleAddTask = () => {
+      // 預設選中第一個分類，避免使用者未選擇時造成空值
+      const defaultCategory = (localProject.wbs && localProject.wbs.length > 0) ? localProject.wbs[0].name : '';
+      setEditingTask({
+          category: defaultCategory,
+          startDate: localProject.startDate || new Date().toISOString().split('T')[0],
+          duration: 1,
+          progress: 0,
+          title: '',
+          assignee: '',
+          delayReason: ''
+      });
+      setShowEditModal(true);
+  };
+
   const saveTask = () => {
+      let finalTask = { ...editingTask };
+      
+      // 防呆：如果分類為空 (使用者可能未操作選單)，強制設為第一個分類
+      if (!finalTask.category && localProject.wbs && localProject.wbs.length > 0) {
+          finalTask.category = localProject.wbs[0].name;
+      }
+
       let newTasks = [...(localProject.tasks || [])];
-      if (editingTask.id) {
-          const idx = newTasks.findIndex(t => t.id === editingTask.id);
-          if (idx !== -1) newTasks[idx] = editingTask as Task;
+      if (finalTask.id) {
+          const idx = newTasks.findIndex(t => t.id === finalTask.id);
+          if (idx !== -1) newTasks[idx] = finalTask as Task;
       } else {
-          newTasks.push({ ...editingTask, id: Date.now(), progress: 0, actualHours: 0 } as Task);
+          newTasks.push({ 
+              ...finalTask, 
+              id: Date.now(), 
+              actualHours: 0,
+              title: finalTask.title || '新任務',
+              startDate: finalTask.startDate || new Date().toISOString().split('T')[0],
+              duration: finalTask.duration || 1,
+              progress: finalTask.progress || 0
+          } as Task);
       }
       setLocalProject({ ...localProject, tasks: newTasks });
       setShowEditModal(false);
@@ -374,7 +405,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                     <button onClick={scrollToToday} className="px-3 py-1 bg-red-500 text-white text-xs font-bold rounded shadow-sm hover:bg-red-600 flex items-center"><i className="fa-solid fa-calendar-day mr-1"></i> TODAY</button>
                 </div>
                 {canEditTasks && (
-                    <button onClick={() => { setEditingTask({}); setShowEditModal(true); }} className="bg-brand-600 text-white py-1.5 px-3 rounded-md text-xs font-bold shadow-sm flex-shrink-0"><i className="fa-solid fa-plus mr-1"></i>新增任務</button>
+                    <button onClick={handleAddTask} className="bg-brand-600 text-white py-1.5 px-3 rounded-md text-xs font-bold shadow-sm flex-shrink-0"><i className="fa-solid fa-plus mr-1"></i>新增任務</button>
                 )}
             </div>
 
@@ -531,7 +562,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                 <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6">
                     <h3 className="font-bold text-lg mb-4">{editingTask.id ? '編輯任務' : '新增任務'}</h3>
                     <div className="space-y-3">
-                        <div><label className="text-xs font-bold text-slate-500 block mb-1">任務名稱</label><input value={editingTask.title || ''} onChange={e => setEditingTask({...editingTask, title: e.target.value})} className="w-full border rounded px-3 py-2 text-sm" /></div>
+                        <div><label className="text-xs font-bold text-slate-500 block mb-1">任務名稱</label><input value={editingTask.title || ''} onChange={e => setEditingTask({...editingTask, title: e.target.value})} className="w-full border rounded px-3 py-2 text-sm" placeholder="例如: 需求訪談" /></div>
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <label className="text-xs font-bold text-slate-500 block mb-1">WBS 階段</label>
