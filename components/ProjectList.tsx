@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Project, LoginData } from '../types';
+import { Project, LoginData, Task } from '../types';
 
 interface ProjectListProps {
   projects: Project[];
@@ -32,12 +32,47 @@ export const ProjectList: React.FC<ProjectListProps> = ({ projects, loginData, o
     { id: 'w7', name: '7.0 品質檢驗', collapsed: false }
   ];
 
+  // 定義各 WBS 階段的預設任務模板
+  const defaultTaskTemplates = [
+    { category: '1.0 需求分析', titles: ['內容規劃'] },
+    { category: '2.0 系統設計', titles: ['規範審查', '圖面設計', '設計審查', '承認圖說', '治具規劃'] },
+    { category: '3.0 發包項目', titles: ['標準箱體', '箱體(非標準)', '設備材料'] },
+    { category: '4.0 治具整合', titles: ['治具規格', '發包治具'] },
+    { category: '5.0 硬體製作', titles: ['配線', '線路檢查'] },
+    { category: '6.0 試車階段', titles: ['軟體調適', '硬體測試', '二次測試'] },
+    { category: '7.0 品質檢驗', titles: ['儀器校驗', '設備確認'] }
+  ];
+
   const openCreateModal = () => {
+    const today = new Date().toISOString().split('T')[0];
+
+    // 生成預設任務
+    const initialTasks: Task[] = [];
+    let idCounter = 0;
+
+    defaultTaskTemplates.forEach(template => {
+      template.titles.forEach(title => {
+        initialTasks.push({
+          id: Date.now() + idCounter++, // 確保 ID 唯一
+          title: title,
+          category: template.category,
+          assignee: '', // 預設無負責人
+          startDate: today,
+          duration: 1,
+          hours: 0,
+          actualHours: 0,
+          progress: 0,
+          delayReason: ''
+        });
+      });
+    });
+
     setEditingProject({
       id: '', name: '', client: '', budgetHours: 0, status: 'Active',
-      startDate: new Date().toISOString().split('T')[0],
+      startDate: today,
       wbs: JSON.parse(JSON.stringify(defaultWBS)), // Deep copy default WBS
-      engineers: [], tasks: [], holidays: []
+      tasks: initialTasks, // 帶入預設任務
+      engineers: [], holidays: []
     });
     setIsNew(true);
     setShowModal(true);
@@ -58,9 +93,9 @@ export const ProjectList: React.FC<ProjectListProps> = ({ projects, loginData, o
 
     // 移除原有任務的實際工時與進度，視為新專案的模板 (保留任務結構與時間長度)
     if (duplicatedProject.tasks) {
-      duplicatedProject.tasks = duplicatedProject.tasks.map((t: any) => ({
+      duplicatedProject.tasks = duplicatedProject.tasks.map((t: any, index: number) => ({
         ...t,
-        id: Date.now() + Math.random(), // 產生新 ID 避免衝突
+        id: Date.now() + index, // 產生新 ID 避免衝突
         actualHours: 0,
         progress: 0,
         delayReason: ''
