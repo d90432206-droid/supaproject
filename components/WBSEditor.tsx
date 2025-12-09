@@ -1,4 +1,4 @@
-
+< ![CDATA[
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Project, Task, Engineer, GlobalEngineer, Log, LoginData } from '../types';
 
@@ -78,6 +78,12 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
     const todayDate = toLocalISOString(); // Use local date
     const START_OFFSET = 15;
 
+    // Consistent Sidebar Width Calculation
+    // Note: Using window.innerWidth in render is fine for client-side only app,
+    // but utilizing a state or ResizeObserver would be more 'React-way' if responsiveness needs to be dynamic.
+    // For now, we align with the existing logic but store it to ensure header/body match.
+    const sidebarWidth = typeof window !== 'undefined' && window.innerWidth < 768 ? 160 : 260;
+
     // Permission Checks
     const isAdmin = loginData.role === 'Admin';
     const isPM = localProject.manager === loginData.user;
@@ -123,7 +129,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
     const scrollToToday = () => {
         if (ganttBodyRef.current && todayOffset >= 0) {
             const clientWidth = ganttBodyRef.current.clientWidth;
-            const targetLeft = (window.innerWidth < 768 ? 160 : 260) + todayOffset - (clientWidth / 2);
+            const targetLeft = sidebarWidth + todayOffset - (clientWidth / 2);
             ganttBodyRef.current.scrollTo({ left: Math.max(0, targetLeft), behavior: 'smooth' });
         }
     };
@@ -460,10 +466,10 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                                 <div className="h-7 flex items-center relative">
                                     {renderDays.map(d => (
                                         <div key={d.dateStr}
-                                            className={`h-full border-r border-slate-100 flex justify-center items-center text-[10px] font-bold text-slate-600 cursor-pointer 
-                                            ${d.isWeekend ? 'bg-orange-200' : ''} 
-                                            ${d.isHoliday ? '!bg-red-100 !text-red-600 !border-b-2 !border-red-400' : ''}
-                                         `}
+                                            className={`h-full border-r border-slate-100 flex justify-center items-center text-[10px] font-bold text-slate-600 cursor-pointer
+${d.isWeekend ? 'bg-orange-200' : ''}
+${d.isHoliday ? '!bg-red-100 !text-red-600 !border-b-2 !border-red-400' : ''}
+`}
                                             style={{ width: colWidth }}
                                             onClick={() => {
                                                 const newHolidays = d.isHoliday ? (localProject.holidays || []).filter(h => h !== d.dateStr) : [...(localProject.holidays || []), d.dateStr];
@@ -474,10 +480,10 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                                             {d.label}
                                         </div>
                                     ))}
-                                    {/* Today Line in Header (Triangle Indicator) */}
+                                    {/* Today Line in Header (Triangle Indicator) - Using translate-x-1/2 to align center of triangle to the line */}
                                     {todayOffset >= 0 && (
                                         <div className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-50 pointer-events-none" style={{ left: todayOffset + (colWidth / 2) }}>
-                                            <div className="absolute top-0 -left-1.5 text-red-500 text-[10px]"><i className="fa-solid fa-caret-down"></i></div>
+                                            <div className="absolute top-0 left-1/2 -translate-x-1/2 text-red-500 text-[10px]"><i className="fa-solid fa-caret-down"></i></div>
                                         </div>
                                     )}
                                 </div>
@@ -487,19 +493,17 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
 
                     {/* Content */}
                     <div className="flex-1 overflow-auto custom-scroll relative" ref={ganttBodyRef} onScroll={e => timelineHeaderRef.current && (timelineHeaderRef.current.scrollLeft = (e.target as HTMLElement).scrollLeft)}>
-                        <div className="relative min-h-full" style={{ width: (window.innerWidth < 768 ? 160 : 260) + totalContentWidth }}>
+                        <div className="relative min-h-full" style={{ width: sidebarWidth + totalContentWidth }}>
                             {/* Background Grid */}
-                            <div className="absolute inset-0 flex pointer-events-none z-0 pl-[160px] md:pl-[260px]">
+                            <div className="absolute inset-0 flex pointer-events-none z-0" style={{ paddingLeft: sidebarWidth }}>
                                 {renderDays.map(d => (
                                     <div key={`bg-${d.dateStr}`} className={`flex-shrink-0 border-r border-slate-100 h-full box-border ${d.isWeekend ? 'bg-orange-50' : ''} ${d.isHoliday ? '!bg-red-50' : ''}`} style={{ width: colWidth }}></div>
                                 ))}
                             </div>
 
-                            {/* Today Line - Z-Index 30: Above Grid (0) and Static Bars (10), but below Sticky Cols (60) and Dragged Bars (50) if desired.
-                            User said "Today line covers task list", so it must be lower than Sticky (60). 
-                        */}
+                            {/* Today Line - Z-Index 30: Above Grid (0) and Static Bars (10), but below Sticky Cols (60) */}
                             {todayOffset >= 0 && (
-                                <div className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-30 pointer-events-none" style={{ left: (window.innerWidth < 768 ? 160 : 260) + todayOffset + (colWidth / 2) }}>
+                                <div className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-30 pointer-events-none" style={{ left: sidebarWidth + todayOffset + (colWidth / 2) }}>
                                     {/* Caret removed from body to avoid duplication, now in Header */}
                                 </div>
                             )}
@@ -508,20 +512,33 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                             <div className="relative pb-10">
                                 {(localProject.wbs || []).map((cat, i) => (
                                     <div key={cat.id}>
-                                        {/* Sticky WBS Header - Z-Index 60 */}
-                                        <div className="sticky left-0 w-[100vw] z-[60] bg-slate-50/95 border-y border-slate-200 cursor-pointer hover:bg-slate-100 flex" onClick={() => {
-                                            const newWbs = localProject.wbs.map(w => w.id === cat.id ? { ...w, collapsed: !w.collapsed } : w);
-                                            setLocalProject({ ...localProject, wbs: newWbs });
-                                        }}>
-                                            <div className="w-[160px] md:w-[260px] px-2 md:px-4 py-1.5 flex items-center font-bold text-xs text-slate-700 sticky-left-col border-r border-slate-200">
+                                        {/* Sticky WBS Header - Z-Index 60 only for left label, Timeline part is transparent/z-0 to show Red Line */}
+                                        <div className="flex h-9 border-y border-slate-200 group">
+                                            {/* Left Sticky Label */}
+                                            <div className="sticky left-0 z-[60] bg-slate-50 flex items-center px-4 font-bold text-xs text-slate-700 sticky-left-col border-r border-slate-200 cursor-pointer hover:bg-slate-100"
+                                                style={{ width: sidebarWidth }}
+                                                onClick={() => {
+                                                    const newWbs = localProject.wbs.map(w => w.id === cat.id ? { ...w, collapsed: !w.collapsed } : w);
+                                                    setLocalProject({ ...localProject, wbs: newWbs });
+                                                }}>
                                                 <i className={`fa-solid fa-caret-down mr-2 transition-transform ${cat.collapsed ? '-rotate-90' : ''}`}></i>
                                                 {cat.name}
                                             </div>
+                                            {/* Right Timeline Part - Transparent click area */}
+                                            <div className="flex-1 cursor-pointer hover:bg-slate-50/20 z-10"
+                                                onClick={() => {
+                                                    const newWbs = localProject.wbs.map(w => w.id === cat.id ? { ...w, collapsed: !w.collapsed } : w);
+                                                    setLocalProject({ ...localProject, wbs: newWbs });
+                                                }}>
+                                            </div>
                                         </div>
+
                                         {!cat.collapsed && (localProject.tasks || []).filter(t => t.category === cat.name).map(task => (
                                             <div key={task.id} className="flex h-9 border-b border-slate-100 relative group hover:bg-blue-50/20">
                                                 {/* Sticky Task Info - Z-Index 60 to cover Today Line (30) */}
-                                                <div className="sticky left-0 w-[160px] md:w-[260px] bg-white z-[60] flex items-center px-2 md:px-4 border-r border-slate-200 sticky-left-col shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] cursor-pointer" onClick={() => { setEditingTask({ ...task }); setShowEditModal(true); }}>
+                                                <div className="sticky left-0 bg-white z-[60] flex items-center px-4 border-r border-slate-200 sticky-left-col shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] cursor-pointer"
+                                                    style={{ width: sidebarWidth }}
+                                                    onClick={() => { setEditingTask({ ...task }); setShowEditModal(true); }}>
                                                     <div className="w-full truncate">
                                                         <div className="flex justify-between items-center">
                                                             <span className="text-xs font-medium text-slate-700 truncate">{task.title}</span>
@@ -536,8 +553,8 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                                                 <div className="relative h-full w-full">
                                                     <div
                                                         className={`absolute h-5 top-2 rounded-sm shadow-sm flex items-center px-2 text-[10px] text-white font-bold whitespace-nowrap overflow-hidden border border-white/20 select-none
-                                                        ${draggingState.task?.id === task.id ? 'opacity-80 scale-[1.01] shadow-xl ring-2 ring-white z-50 cursor-grabbing' : 'cursor-grab hover:brightness-110 z-10'}
-                                                    `}
+${draggingState.task?.id === task.id ? 'opacity-80 scale-[1.01] shadow-xl ring-2 ring-white z-50 cursor-grabbing' : 'cursor-grab hover:brightness-110 z-10'}
+`}
                                                         style={{
                                                             left: getTaskLeft(task),
                                                             width: Math.max(colWidth, task.duration * colWidth),
@@ -733,3 +750,4 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
         </div>
     );
 };
+]]>
