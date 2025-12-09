@@ -1,4 +1,4 @@
-< ![CDATA[
+
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Project, Task, Engineer, GlobalEngineer, Log, LoginData } from '../types';
 
@@ -79,7 +79,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
     const START_OFFSET = 15;
 
     // Consistent Sidebar Width Calculation
-    // Note: Using window.innerWidth in render is fine for client-side only app,
+    // Note: Using window.innerWidth in render is fine for client-side only app, 
     // but utilizing a state or ResizeObserver would be more 'React-way' if responsiveness needs to be dynamic.
     // For now, we align with the existing logic but store it to ensure header/body match.
     const sidebarWidth = typeof window !== 'undefined' && window.innerWidth < 768 ? 160 : 260;
@@ -466,10 +466,10 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                                 <div className="h-7 flex items-center relative">
                                     {renderDays.map(d => (
                                         <div key={d.dateStr}
-                                            className={`h-full border-r border-slate-100 flex justify-center items-center text-[10px] font-bold text-slate-600 cursor-pointer
-${d.isWeekend ? 'bg-orange-200' : ''}
-${d.isHoliday ? '!bg-red-100 !text-red-600 !border-b-2 !border-red-400' : ''}
-`}
+                                            className={`h-full border-r border-slate-100 flex justify-center items-center text-[10px] font-bold text-slate-600 cursor-pointer 
+                                            ${d.isWeekend ? 'bg-orange-200' : ''} 
+                                            ${d.isHoliday ? '!bg-red-100 !text-red-600 !border-b-2 !border-red-400' : ''}
+                                         `}
                                             style={{ width: colWidth }}
                                             onClick={() => {
                                                 const newHolidays = d.isHoliday ? (localProject.holidays || []).filter(h => h !== d.dateStr) : [...(localProject.holidays || []), d.dateStr];
@@ -553,8 +553,8 @@ ${d.isHoliday ? '!bg-red-100 !text-red-600 !border-b-2 !border-red-400' : ''}
                                                 <div className="relative h-full w-full">
                                                     <div
                                                         className={`absolute h-5 top-2 rounded-sm shadow-sm flex items-center px-2 text-[10px] text-white font-bold whitespace-nowrap overflow-hidden border border-white/20 select-none
-${draggingState.task?.id === task.id ? 'opacity-80 scale-[1.01] shadow-xl ring-2 ring-white z-50 cursor-grabbing' : 'cursor-grab hover:brightness-110 z-10'}
-`}
+                                                        ${draggingState.task?.id === task.id ? 'opacity-80 scale-[1.01] shadow-xl ring-2 ring-white z-50 cursor-grabbing' : 'cursor-grab hover:brightness-110 z-10'}
+                                                    `}
                                                         style={{
                                                             left: getTaskLeft(task),
                                                             width: Math.max(colWidth, task.duration * colWidth),
@@ -750,4 +750,3 @@ ${draggingState.task?.id === task.id ? 'opacity-80 scale-[1.01] shadow-xl ring-2
         </div>
     );
 };
-]]>
