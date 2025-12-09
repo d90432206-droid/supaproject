@@ -428,7 +428,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                 <div className="flex-1 flex flex-col overflow-hidden bg-white relative">
                     {/* Timeline Header */}
                     <div className="h-14 bg-slate-50/95 backdrop-blur flex flex-none border-b border-slate-200 z-20">
-                        <div className="sticky-left-header w-[160px] md:w-[260px] flex-shrink-0 border-r border-slate-200 bg-slate-50 flex items-center px-4 font-bold text-xs text-slate-600 uppercase shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] z-30">任務列表 / WBS</div>
+                        <div className="sticky-left-header w-[160px] md:w-[260px] flex-shrink-0 border-r border-slate-200 bg-slate-50 flex items-center px-4 font-bold text-xs text-slate-600 uppercase shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] z-[60]">任務列表 / WBS</div>
                         <div className="flex-1 overflow-hidden relative" ref={timelineHeaderRef}>
                             <div className="flex flex-col h-full bg-white" style={{ width: totalContentWidth }}>
                                 <div className="h-7 border-b border-slate-100 flex items-center font-bold text-xs text-slate-500 bg-slate-50">
@@ -477,7 +477,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                             <div className="relative z-10 pb-10">
                                 {(localProject.wbs || []).map(cat => (
                                     <div key={cat.id}>
-                                        <div className="sticky left-0 w-[100vw] z-20 bg-slate-50/95 border-y border-slate-200 cursor-pointer hover:bg-slate-100 flex" onClick={() => {
+                                        <div className="sticky left-0 w-[100vw] z-[60] bg-slate-50/95 border-y border-slate-200 cursor-pointer hover:bg-slate-100 flex" onClick={() => {
                                             const newWbs = localProject.wbs.map(w => w.id === cat.id ? { ...w, collapsed: !w.collapsed } : w);
                                             setLocalProject({ ...localProject, wbs: newWbs });
                                         }}>
@@ -489,7 +489,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                                         {!cat.collapsed && (localProject.tasks || []).filter(t => t.category === cat.name).map(task => (
                                             <div key={task.id} className="flex h-9 border-b border-slate-100 relative group hover:bg-blue-50/20">
                                                 {/* Sticky Task Info */}
-                                                <div className="sticky left-0 w-[160px] md:w-[260px] bg-white z-10 flex items-center px-2 md:px-4 border-r border-slate-200 sticky-left-col shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] cursor-pointer" onClick={() => { setEditingTask({ ...task }); setShowEditModal(true); }}>
+                                                <div className="sticky left-0 w-[160px] md:w-[260px] bg-white z-[60] flex items-center px-2 md:px-4 border-r border-slate-200 sticky-left-col shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] cursor-pointer" onClick={() => { setEditingTask({ ...task }); setShowEditModal(true); }}>
                                                     <div className="w-full truncate">
                                                         <div className="flex justify-between items-center">
                                                             <span className="text-xs font-medium text-slate-700 truncate">{task.title}</span>
