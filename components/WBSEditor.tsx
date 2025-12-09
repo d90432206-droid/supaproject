@@ -11,23 +11,41 @@ interface WBSEditorProps {
     globalEngineers: GlobalEngineer[];
 }
 
-// Helpers
-const safeDate = (d: string | undefined | null) => {
-    if (!d) return new Date();
+// Helper Functions - Timezone Safe (Local Time)
+const toLocalISOString = (date: Date = new Date()) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
+const parseLocalDate = (d: string | undefined | null) => {
+    if (!d) {
+        const now = new Date();
+        return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    }
+    // Handle YYYY-MM-DD manually to ensure local time midnight
+    if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)) {
+        const [y, m, day] = d.split('-').map(Number);
+        return new Date(y, m - 1, day);
+    }
     const date = new Date(d);
     return isNaN(date.getTime()) ? new Date() : date;
 };
 
 const addDays = (d: string, n: number) => {
-    const x = safeDate(d);
+    const x = parseLocalDate(d);
     x.setDate(x.getDate() + n);
-    return x.toISOString().split('T')[0];
+    return toLocalISOString(x);
 };
 
 const getDaysDiff = (s: string, e: string) => {
-    const d1 = safeDate(s);
-    const d2 = safeDate(e);
-    return Math.ceil((d2.getTime() - d1.getTime()) / 86400000);
+    const d1 = parseLocalDate(s);
+    const d2 = parseLocalDate(e);
+    // Use UTC conversion for difference to ignore DST hours shift issues if any
+    const utc1 = Date.UTC(d1.getFullYear(), d1.getMonth(), d1.getDate());
+    const utc2 = Date.UTC(d2.getFullYear(), d2.getMonth(), d2.getDate());
+    return Math.floor((utc2 - utc1) / 86400000);
 };
 
 export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, onClose, globalEngineers, loginData }) => {
@@ -46,7 +64,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
 
     // Default stats date to Project Start Date to ensure data visibility
     const [statsWeeklyDate, setStatsWeeklyDate] = useState(
-        project.startDate ? project.startDate : new Date().toISOString().split('T')[0]
+        project.startDate ? project.startDate : toLocalISOString()
     );
 
     const [draggingState, setDraggingState] = useState<{ isDragging: boolean, task: Task | null, startX: number, startDate: string }>({
@@ -57,7 +75,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
     const timelineHeaderRef = useRef<HTMLDivElement>(null);
     const ganttBodyRef = useRef<HTMLDivElement>(null);
 
-    const todayDate = new Date().toISOString().split('T')[0];
+    const todayDate = toLocalISOString(); // Use local date
     const START_OFFSET = 15;
 
     // Permission Checks
@@ -112,16 +130,18 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
 
     // Render Days
     const renderDays = useMemo(() => {
-        const validStart = localProject.startDate || new Date().toISOString().split('T')[0];
+        const validStart = localProject.startDate || toLocalISOString();
         const start = addDays(validStart, -START_OFFSET);
         let duration = localProject.endDate ? getDaysDiff(validStart, localProject.endDate) + START_OFFSET + 30 : 60;
         if (duration > 3650) duration = 365; // Cap at 1 year view to prevent crash
         if (duration < 1) duration = 30;
 
         const days = [];
+        const startDateObj = parseLocalDate(start);
         for (let i = 0; i < duration; i++) {
-            const d = new Date(start); d.setDate(d.getDate() + i);
-            const dateStr = d.toISOString().split('T')[0];
+            const d = new Date(startDateObj);
+            d.setDate(startDateObj.getDate() + i);
+            const dateStr = toLocalISOString(d);
             const dayOfWeek = d.getDay();
             days.push({
                 dateStr,
@@ -137,7 +157,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
         const items: { label: string, width: number }[] = [];
         let currentLabel = ''; let width = 0;
         renderDays.forEach(day => {
-            const d = new Date(day.dateStr);
+            const d = parseLocalDate(day.dateStr);
             let label = `${d.getFullYear()}年 ${(d.getMonth() + 1).toString().padStart(2, '0')}月`;
             if (label !== currentLabel) {
                 if (currentLabel) items.push({ label: currentLabel, width });
@@ -250,16 +270,18 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
 
     // --- Robust Stats Matching Logic ---
     const weekDays = useMemo(() => {
-        const baseDate = safeDate(statsWeeklyDate);
+        const baseDate = parseLocalDate(statsWeeklyDate);
         const day = baseDate.getDay();
         const diff = baseDate.getDate() - day + (day === 0 ? -6 : 1);
-        const monday = new Date(baseDate.setDate(diff));
+        const monday = new Date(baseDate);
+        monday.setDate(diff);
+
         const days = [];
         const dayNames = ['週一', '週二', '週三', '週四', '週五', '週六', '週日'];
         for (let i = 0; i < 7; i++) {
             const d = new Date(monday);
             d.setDate(monday.getDate() + i);
-            days.push({ label: dayNames[i], dateStr: d.toISOString().split('T')[0] });
+            days.push({ label: dayNames[i], dateStr: toLocalISOString(d) });
         }
         return days;
     }, [statsWeeklyDate]);
@@ -321,7 +343,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
         const defaultCategory = (localProject.wbs && localProject.wbs.length > 0) ? localProject.wbs[0].name : '';
         setEditingTask({
             category: defaultCategory,
-            startDate: localProject.startDate || new Date().toISOString().split('T')[0],
+            startDate: localProject.startDate || toLocalISOString(),
             duration: 1,
             progress: 0,
             title: '',
@@ -349,7 +371,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                 id: Date.now(),
                 actualHours: 0,
                 title: finalTask.title || '新任務',
-                startDate: finalTask.startDate || new Date().toISOString().split('T')[0],
+                startDate: finalTask.startDate || toLocalISOString(),
                 duration: finalTask.duration || 1,
                 progress: finalTask.progress || 0
             } as Task);
@@ -435,7 +457,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                                 <div className="h-7 border-b border-slate-100 flex items-center font-bold text-xs text-slate-500 bg-slate-50">
                                     {headerTopRow.map((item, i) => <div key={i} className="pl-3 border-r border-slate-200 h-full flex items-center" style={{ width: item.width }}>{item.label}</div>)}
                                 </div>
-                                <div className="h-7 flex items-center">
+                                <div className="h-7 flex items-center relative">
                                     {renderDays.map(d => (
                                         <div key={d.dateStr}
                                             className={`h-full border-r border-slate-100 flex justify-center items-center text-[10px] font-bold text-slate-600 cursor-pointer 
@@ -452,6 +474,12 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                                             {d.label}
                                         </div>
                                     ))}
+                                    {/* Today Line in Header (Triangle Indicator) */}
+                                    {todayOffset >= 0 && (
+                                        <div className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-50 pointer-events-none" style={{ left: todayOffset + (colWidth / 2) }}>
+                                            <div className="absolute top-0 -left-1.5 text-red-500 text-[10px]"><i className="fa-solid fa-caret-down"></i></div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -472,7 +500,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                         */}
                             {todayOffset >= 0 && (
                                 <div className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-30 pointer-events-none" style={{ left: (window.innerWidth < 768 ? 160 : 260) + todayOffset + (colWidth / 2) }}>
-                                    <div className="absolute -top-2.5 -left-1.5 text-red-500"><i className="fa-solid fa-caret-down text-sm"></i></div>
+                                    {/* Caret removed from body to avoid duplication, now in Header */}
                                 </div>
                             )}
 
