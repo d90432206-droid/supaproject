@@ -378,8 +378,8 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
 
     return (
         <div className={`flex flex-col h-full bg-[#f8fafc] text-sm font-sans absolute inset-0 z-50 ${draggingState.isDragging ? 'cursor-grabbing select-none' : ''}`}>
-            {/* Header */}
-            <header className="h-12 bg-white border-b border-slate-200 flex items-center justify-between px-2 md:px-5 shrink-0 shadow-sm z-30">
+            {/* Header - Z-Index 70 to stay on top */}
+            <header className="h-12 bg-white border-b border-slate-200 flex items-center justify-between px-2 md:px-5 shrink-0 shadow-sm z-[70]">
                 <div className="flex items-center gap-2 md:gap-3 overflow-hidden">
                     <button onClick={handleCloseAttempt} className="text-xs font-bold text-slate-500 hover:text-brand-600 flex items-center gap-1 shrink-0"><i className="fa-solid fa-arrow-left"></i> 返回</button>
                     <div className="h-4 w-px bg-slate-300 mx-1 shrink-0"></div>
@@ -428,6 +428,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                 <div className="flex-1 flex flex-col overflow-hidden bg-white relative">
                     {/* Timeline Header */}
                     <div className="h-14 bg-slate-50/95 backdrop-blur flex flex-none border-b border-slate-200 z-20">
+                        {/* Sticky Header - Z-Index 60 to cover Today Line but under Header */}
                         <div className="sticky-left-header w-[160px] md:w-[260px] flex-shrink-0 border-r border-slate-200 bg-slate-50 flex items-center px-4 font-bold text-xs text-slate-600 uppercase shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] z-[60]">任務列表 / WBS</div>
                         <div className="flex-1 overflow-hidden relative" ref={timelineHeaderRef}>
                             <div className="flex flex-col h-full bg-white" style={{ width: totalContentWidth }}>
@@ -466,17 +467,20 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                                 ))}
                             </div>
 
-                            {/* Today Line */}
+                            {/* Today Line - Z-Index 30: Above Grid (0) and Static Bars (10), but below Sticky Cols (60) and Dragged Bars (50) if desired.
+                            User said "Today line covers task list", so it must be lower than Sticky (60). 
+                        */}
                             {todayOffset >= 0 && (
-                                <div className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-50 pointer-events-none" style={{ left: (window.innerWidth < 768 ? 160 : 260) + todayOffset + (colWidth / 2) }}>
+                                <div className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-30 pointer-events-none" style={{ left: (window.innerWidth < 768 ? 160 : 260) + todayOffset + (colWidth / 2) }}>
                                     <div className="absolute -top-2.5 -left-1.5 text-red-500"><i className="fa-solid fa-caret-down text-sm"></i></div>
                                 </div>
                             )}
 
                             {/* Task Rows */}
-                            <div className="relative z-10 pb-10">
-                                {(localProject.wbs || []).map(cat => (
+                            <div className="relative pb-10">
+                                {(localProject.wbs || []).map((cat, i) => (
                                     <div key={cat.id}>
+                                        {/* Sticky WBS Header - Z-Index 60 */}
                                         <div className="sticky left-0 w-[100vw] z-[60] bg-slate-50/95 border-y border-slate-200 cursor-pointer hover:bg-slate-100 flex" onClick={() => {
                                             const newWbs = localProject.wbs.map(w => w.id === cat.id ? { ...w, collapsed: !w.collapsed } : w);
                                             setLocalProject({ ...localProject, wbs: newWbs });
@@ -488,7 +492,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                                         </div>
                                         {!cat.collapsed && (localProject.tasks || []).filter(t => t.category === cat.name).map(task => (
                                             <div key={task.id} className="flex h-9 border-b border-slate-100 relative group hover:bg-blue-50/20">
-                                                {/* Sticky Task Info */}
+                                                {/* Sticky Task Info - Z-Index 60 to cover Today Line (30) */}
                                                 <div className="sticky left-0 w-[160px] md:w-[260px] bg-white z-[60] flex items-center px-2 md:px-4 border-r border-slate-200 sticky-left-col shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] cursor-pointer" onClick={() => { setEditingTask({ ...task }); setShowEditModal(true); }}>
                                                     <div className="w-full truncate">
                                                         <div className="flex justify-between items-center">
@@ -654,9 +658,17 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                             {(localProject.wbs || []).map((w, i) => (
                                 <div key={w.id} className="flex gap-2">
                                     <input value={w.name} onChange={e => {
+                                        const newName = e.target.value;
+                                        const oldName = localProject.wbs[i].name;
                                         const newWbs = [...localProject.wbs];
-                                        newWbs[i].name = e.target.value;
-                                        setLocalProject({ ...localProject, wbs: newWbs });
+                                        newWbs[i].name = newName;
+
+                                        // Also update tasks associated with this WBS category to prevent orphan tasks
+                                        const newTasks = (localProject.tasks || []).map(t =>
+                                            t.category === oldName ? { ...t, category: newName } : t
+                                        );
+
+                                        setLocalProject({ ...localProject, wbs: newWbs, tasks: newTasks });
                                     }} className="flex-1 border rounded px-2 py-1 text-sm" />
                                     <button onClick={() => {
                                         const newWbs = localProject.wbs.filter((_, idx) => idx !== i);
