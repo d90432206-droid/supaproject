@@ -27,7 +27,7 @@ interface DBLog {
 
 interface DBSettings {
   key: string;
-  value: string | number; 
+  value: string | number;
   description: string;
 }
 
@@ -56,30 +56,30 @@ const normalizeKeys = (obj: any) => {
 const fetchAllData = async (table: string, sortCol: string | null = null) => {
   let allData: any[] = [];
   let page = 0;
-  const pageSize = 1000; 
-  
+  const pageSize = 1000;
+
   while (true) {
     let query = supabase.from(table).select('*');
-    
+
     // 如果有指定排序，則加入排序條件 (新資料在前)
     if (sortCol) {
       query = query.order(sortCol, { ascending: false });
     }
-    
+
     // 分頁讀取
     const { data, error } = await query.range(page * pageSize, (page + 1) * pageSize - 1);
-    
+
     if (error) throw new Error(`${table} Fetch Error: ${error.message}`);
-    
-    if (!data || data.length === 0) break; 
-    
+
+    if (!data || data.length === 0) break;
+
     allData = allData.concat(data);
-    
-    if (data.length < pageSize) break; 
-    
+
+    if (data.length < pageSize) break;
+
     page++;
   }
-  
+
   return allData;
 };
 
@@ -101,7 +101,7 @@ export const SupabaseService = {
 
       const projects: Project[] = rawProjects.map(p => {
         let details: any = {};
-        try { details = p.details_json ? JSON.parse(p.details_json) : {}; } catch (e) {}
+        try { details = p.details_json ? JSON.parse(p.details_json) : {}; } catch (e) { }
         return {
           id: p.projectid,
           name: p.name,
@@ -188,9 +188,18 @@ export const SupabaseService = {
     }
   },
 
-  // 2.1 刪除多個專案
+  // 2.1 刪除多個專案 (包含刪除關聯的 Logs)
   deleteProjects: async (projectIds: string[]): Promise<void> => {
     try {
+      // Step 1: 先刪除關聯的工時紀錄 (Logs)
+      const { error: logError } = await supabase
+        .from(CONFIG.SUPABASE.TABLES.LOGS)
+        .delete()
+        .in('projectid', projectIds);
+
+      if (logError) throw new Error(`Delete Related Logs Error: ${logError.message}`);
+
+      // Step 2: 再刪除專案本體
       const { error } = await supabase
         .from(CONFIG.SUPABASE.TABLES.PROJECTS)
         .delete()
@@ -232,8 +241,8 @@ export const SupabaseService = {
     try {
       const payload = {
         key: `User:${eng.name}`,
-        value: eng.password, 
-        description: eng.color 
+        value: eng.password,
+        description: eng.color
       };
       const { error } = await supabase
         .from(CONFIG.SUPABASE.TABLES.SETTINGS)
@@ -286,7 +295,7 @@ export const SupabaseService = {
         .from(CONFIG.SUPABASE.TABLES.MESSAGES)
         .delete()
         .eq('messageid', id);
-        
+
       if (error) throw new Error(`Delete Message Error: ${error.message}`);
     } catch (e) {
       console.error("Delete Message Error:", e);
