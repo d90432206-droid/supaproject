@@ -130,7 +130,7 @@ function App() {
       // UI Update - Project List
       setProjects(prev => prev.filter(p => !ids.includes(p.id)));
 
-      // UI Update - Remove related logs to ensure clean state
+      // UI Update - Remove related logs to ensure clean state (Fix orphan logs issue)
       setLogs(prev => prev.filter(l => !ids.includes(l.projectId)));
 
       // 如果刪除的包含目前選取的，清除選取
