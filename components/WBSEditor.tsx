@@ -480,10 +480,10 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                                             {d.label}
                                         </div>
                                     ))}
-                                    {/* Today Line in Header (Triangle Indicator) - Using translate-x-1/2 to align center of triangle to the line */}
+                                    {/* Today Line in Header (Triangle Indicator) - No background line to avoid covering date text */}
                                     {todayOffset >= 0 && (
-                                        <div className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-50 pointer-events-none" style={{ left: todayOffset + (colWidth / 2) }}>
-                                            <div className="absolute top-0 left-1/2 -translate-x-1/2 text-red-500 text-[10px]"><i className="fa-solid fa-caret-down"></i></div>
+                                        <div className="absolute top-0 bottom-0 z-50 pointer-events-none" style={{ left: todayOffset + (colWidth / 2) }}>
+                                            <div className="absolute top-0 left-0 -translate-x-1/2 text-red-500 text-[10px]"><i className="fa-solid fa-caret-down"></i></div>
                                         </div>
                                     )}
                                 </div>
