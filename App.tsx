@@ -417,12 +417,12 @@ function App() {
                 <p className="text-center text-slate-400 text-sm">目前無成員資料</p>
               ) : (
                 <table className="w-full text-sm text-left table-fixed">
-                  <thead className="text-xs text-slate-500 uppercase sticky top-0 z-20 shadow-sm">
+                  <thead className="text-xs text-slate-500 uppercase shadow-sm">
                     <tr>
-                      <th className="py-2 w-[30%] pl-2 bg-white border-b border-slate-100 z-20">姓名</th>
-                      <th className="py-2 w-[30%] bg-white border-b border-slate-100 z-20">密碼</th>
-                      <th className="py-2 w-[15%] bg-white border-b border-slate-100 z-20">顏色</th>
-                      <th className="py-2 w-[25%] text-right pr-2 bg-white border-b border-slate-100 z-20">操作</th>
+                      <th className="py-2 w-[30%] pl-2 bg-white border-b border-slate-100 z-20 sticky top-0">姓名</th>
+                      <th className="py-2 w-[30%] bg-white border-b border-slate-100 z-20 sticky top-0">密碼</th>
+                      <th className="py-2 w-[15%] bg-white border-b border-slate-100 z-20 sticky top-0">顏色</th>
+                      <th className="py-2 w-[25%] text-right pr-2 bg-white border-b border-slate-100 z-20 sticky top-0">操作</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
