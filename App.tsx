@@ -412,12 +412,13 @@ function App() {
             </div>
 
             {/* List */}
-            <div className="flex-1 overflow-y-auto custom-scroll border-t border-slate-100 pt-4">
+            {/* List */}
+            <div className="flex-1 overflow-y-auto custom-scroll border-t border-slate-100 mt-4">
               {globalEngineers.length === 0 ? (
-                <p className="text-center text-slate-400 text-sm">目前無成員資料</p>
+                <p className="text-center text-slate-400 text-sm pt-4">目前無成員資料</p>
               ) : (
                 <table className="w-full text-sm text-left table-fixed">
-                  <thead className="text-xs text-slate-500 uppercase sticky top-0 z-20 bg-white shadow-sm">
+                  <thead className="text-xs text-slate-500 uppercase sticky top-0 z-50 bg-white shadow-sm ring-1 ring-slate-900/5">
                     <tr>
                       <th className="py-2 w-[30%] pl-2 bg-white border-b border-slate-100">姓名</th>
                       <th className="py-2 w-[30%] bg-white border-b border-slate-100">密碼</th>
