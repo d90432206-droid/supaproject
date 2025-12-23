@@ -377,8 +377,12 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
         const validTasks = tasks.filter(t => t.startDate && t.duration > 0);
         if (validTasks.length === 0) return null;
 
+
+        // Sort tasks by date to behave predictably
+        validTasks.sort((a, b) => a.startDate.localeCompare(b.startDate));
+
         let minStart = validTasks[0].startDate;
-        let maxEnd = addDays(validTasks[0].startDate, validTasks[0].duration);
+        let maxEnd = addDays(validTasks[0].startDate, Number(validTasks[0].duration));
         let totalDuration = 0;
         let weightedProgress = 0;
 
@@ -430,8 +434,13 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
             const scrollables = clone.querySelectorAll('.overflow-x-auto, .overflow-auto');
             scrollables.forEach((el) => {
                 (el as HTMLElement).style.overflow = 'visible';
-                (el as HTMLElement).style.width = 'auto';
+                (el as HTMLElement).style.width = 'fit-content'; // Ensure full width is rendered
+                (el as HTMLElement).style.maxWidth = 'none';
             });
+
+            // Ensure the main container also expands
+            clone.style.width = 'fit-content';
+            clone.style.minWidth = '1000px'; // Minimum width to prevent crushing
 
             // --- Pagination Logic ---
             // We'll create a new container and append "Pages" to it
