@@ -80,7 +80,8 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
         format: 'a3' as 'a3' | 'a4',
         orientation: 'landscape' as 'landscape' | 'portrait',
         showDateRange: true,
-        fitToPage: true
+        fitToPage: true,
+        extendMonths: 0
     });
 
     // Default stats date to Project Start Date to ensure data visibility
