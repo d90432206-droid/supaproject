@@ -595,8 +595,8 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                     <div className="flex items-center gap-2">
                         <span className="text-[10px] text-slate-400">週次基準日:</span>
                         <input type="date" value={statsWeeklyDate} onChange={e => setStatsWeeklyDate(e.target.value)} className="border rounded px-2 py-0.5 text-xs font-mono" />
-                        <button onClick={() => setShowReportModal(true)} className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 px-2 py-0.5 rounded text-xs font-bold shadow-sm">
-                            <i className="fa-solid fa-table-list mr-1"></i>詳細報表
+                        <button onClick={() => setShowReportModal(true)} className="bg-brand-600 hover:bg-brand-700 text-white border border-brand-700 px-3 py-1 rounded text-xs font-bold shadow-sm flex items-center transition-colors">
+                            <i className="fa-solid fa-table-list mr-1.5"></i>詳細報表
                         </button>
                     </div>
                 </div>
