@@ -48,6 +48,14 @@ const getDaysDiff = (s: string, e: string) => {
     return Math.floor((utc2 - utc1) / 86400000);
 };
 
+const getISOWeek = (d: Date) => {
+    const date = new Date(d.getTime());
+    date.setHours(0, 0, 0, 0);
+    date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7);
+    const week1 = new Date(date.getFullYear(), 0, 4);
+    return 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
+};
+
 export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, onClose, globalEngineers, loginData }) => {
     const [localProject, setLocalProject] = useState<Project>(JSON.parse(JSON.stringify(project)));
     const [viewMode, setViewMode] = useState<'day' | 'week' | 'month' | 'custom'>('day');
@@ -61,6 +69,9 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
     const [showDelayModal, setShowDelayModal] = useState(false);
     const [pendingDelayTask, setPendingDelayTask] = useState<{ task: Task, newDate: string } | null>(null);
     const [delayReasonInput, setDelayReasonInput] = useState('');
+
+    // Report Modal
+    const [showReportModal, setShowReportModal] = useState(false);
 
     // Default stats date to Project Start Date to ensure data visibility
     const [statsWeeklyDate, setStatsWeeklyDate] = useState(
@@ -477,7 +488,9 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                                             }}
                                             title={d.isHoliday ? '取消休假' : '設為休假'}
                                         >
-                                            {d.label}
+                                            {viewMode === 'month' ? (
+                                                d.isWeekend ? '' : (parseLocalDate(d.dateStr).getDay() === 1 ? `W${getISOWeek(parseLocalDate(d.dateStr))}` : '')
+                                            ) : d.label}
                                         </div>
                                     ))}
                                     {/* Today Line in Header (Triangle Indicator) - No background line to avoid covering date text */}
@@ -582,6 +595,9 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                     <div className="flex items-center gap-2">
                         <span className="text-[10px] text-slate-400">週次基準日:</span>
                         <input type="date" value={statsWeeklyDate} onChange={e => setStatsWeeklyDate(e.target.value)} className="border rounded px-2 py-0.5 text-xs font-mono" />
+                        <button onClick={() => setShowReportModal(true)} className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 px-2 py-0.5 rounded text-xs font-bold shadow-sm">
+                            <i className="fa-solid fa-table-list mr-1"></i>詳細報表
+                        </button>
                     </div>
                 </div>
                 <div className="flex-1 overflow-auto custom-scroll">
@@ -747,6 +763,141 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                     </div>
                 </div>
             )}
+
+            {/* Labor Detailed Report Modal */}
+            {showReportModal && (
+                <LaborReportModal
+                    project={project}
+                    logs={logs}
+                    engineers={globalEngineers}
+                    onClose={() => setShowReportModal(false)}
+                />
+            )}
+        </div>
+    );
+};
+
+interface LaborReportModalProps {
+    project: Project;
+    logs: Log[];
+    engineers: GlobalEngineer[];
+    onClose: () => void;
+}
+
+const LaborReportModal: React.FC<LaborReportModalProps> = ({ project, logs, engineers, onClose }) => {
+    const [selectedEng, setSelectedEng] = useState('');
+    const [startDate, setStartDate] = useState(project.startDate || '');
+    const [endDate, setEndDate] = useState(project.endDate || '');
+
+    const filteredLogs = useMemo(() => {
+        return logs.filter(l => {
+            const logDate = String(l.date).replace(/\//g, '-');
+            const targetId = String(project.id).trim().toLowerCase();
+            const logProjStr = String(l.projectId).toLowerCase();
+
+            // Project Check
+            const isProjectMatch = logProjStr === targetId || logProjStr.includes(targetId) || targetId.includes(logProjStr);
+            if (!isProjectMatch) return false;
+
+            // Date Range Check
+            if (startDate && logDate < startDate) return false;
+            if (endDate && logDate > endDate) return false;
+
+            // Engineer Check
+            if (selectedEng && l.engineer !== selectedEng) return false;
+
+            return true;
+        }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    }, [logs, project.id, startDate, endDate, selectedEng]);
+
+    const handleExport = () => {
+        const headers = ['日期', '姓名', '任務/備註', '工時'];
+        const csvContent = [
+            headers.join(','),
+            ...filteredLogs.map(l => [
+                l.date,
+                l.engineer,
+                `"${(l.taskTitle || l.content || '').replace(/"/g, '""')}"`,
+                l.hours
+            ].join(','))
+        ].join('\n');
+
+        const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `${project.name}_工時報表_${new Date().toISOString().slice(0, 10)}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl p-6 flex flex-col max-h-[90vh]">
+                <div className="flex justify-between items-center mb-4 border-b pb-2">
+                    <h3 className="font-bold text-lg text-slate-800"><i className="fa-solid fa-table-list mr-2 text-brand-600"></i>工時詳細報表 - {project.name}</h3>
+                    <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><i className="fa-solid fa-times text-xl"></i></button>
+                </div>
+
+                {/* Filters */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4 bg-slate-50 p-3 rounded border border-slate-100">
+                    <div>
+                        <label className="text-xs font-bold text-slate-500 block mb-1">人員篩選</label>
+                        <select value={selectedEng} onChange={e => setSelectedEng(e.target.value)} className="w-full border rounded px-2 py-1.5 text-sm">
+                            <option value="">全部人員</option>
+                            {engineers.map(e => <option key={e.name} value={e.name}>{e.name}</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-slate-500 block mb-1">開始日期</label>
+                        <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full border rounded px-2 py-1.5 text-sm" />
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-slate-500 block mb-1">結束日期</label>
+                        <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full border rounded px-2 py-1.5 text-sm" />
+                    </div>
+                    <div className="flex items-end">
+                        <button onClick={handleExport} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-1.5 rounded text-sm shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled={filteredLogs.length === 0}>
+                            <i className="fa-solid fa-file-csv mr-2"></i>匯出 CSV
+                        </button>
+                    </div>
+                </div>
+
+                {/* Table */}
+                <div className="flex-1 overflow-auto custom-scroll border border-slate-200 rounded">
+                    <table className="w-full text-sm text-left">
+                        <thead className="text-xs text-slate-500 uppercase bg-slate-50 sticky top-0 font-bold">
+                            <tr>
+                                <th className="px-4 py-2 bg-slate-50">日期</th>
+                                <th className="px-4 py-2 bg-slate-50">姓名</th>
+                                <th className="px-4 py-2 bg-slate-50">任務 / 備註內容</th>
+                                <th className="px-4 py-2 bg-slate-50 text-right">工時</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                            {filteredLogs.length === 0 ? (
+                                <tr><td colSpan={4} className="text-center py-8 text-slate-400">無符合條件的資料</td></tr>
+                            ) : filteredLogs.map(l => (
+                                <tr key={l.logId} className="hover:bg-slate-50">
+                                    <td className="px-4 py-2 font-mono text-slate-600 whitespace-nowrap">{l.date}</td>
+                                    <td className="px-4 py-2 font-bold text-slate-700 whitespace-nowrap">{l.engineer}</td>
+                                    <td className="px-4 py-2 text-slate-800">
+                                        <div className="max-w-[300px] truncate" title={l.taskTitle || l.content}>
+                                            {l.taskTitle && <span className="bg-brand-50 text-brand-700 px-1.5 py-0.5 rounded text-xs mr-2">{l.taskTitle}</span>}
+                                            {l.content || <span className="text-slate-300 italic">無備註</span>}
+                                        </div>
+                                    </td>
+                                    <td className="px-4 py-2 text-right font-mono font-bold text-brand-600">{l.hours}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+                <div className="mt-2 text-xs text-slate-400 text-right">
+                    共 {filteredLogs.length} 筆資料，總工時: {filteredLogs.reduce((a, b) => a + b.hours, 0)} 小時
+                </div>
+            </div>
         </div>
     );
 };

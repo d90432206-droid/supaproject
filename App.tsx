@@ -416,22 +416,22 @@ function App() {
               {globalEngineers.length === 0 ? (
                 <p className="text-center text-slate-400 text-sm">目前無成員資料</p>
               ) : (
-                <table className="w-full text-sm text-left">
-                  <thead className="text-xs text-slate-500 uppercase bg-white sticky top-0">
+                <table className="w-full text-sm text-left table-fixed">
+                  <thead className="text-xs text-slate-500 uppercase bg-white sticky top-0 shadow-sm z-10">
                     <tr>
-                      <th className="py-2">姓名</th>
-                      <th className="py-2">密碼</th>
-                      <th className="py-2">顏色</th>
-                      <th className="py-2 text-right">操作</th>
+                      <th className="py-2 w-[30%] pl-2">姓名</th>
+                      <th className="py-2 w-[30%]">密碼</th>
+                      <th className="py-2 w-[15%]">顏色</th>
+                      <th className="py-2 w-[25%] text-right pr-2">操作</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {globalEngineers.map(eng => (
                       <tr key={eng.name} className="hover:bg-slate-50">
-                        <td className="py-2 font-bold text-slate-700">{eng.name}</td>
-                        <td className="py-2 font-mono text-slate-500">{eng.password}</td>
-                        <td className="py-2"><div className="w-4 h-4 rounded-full" style={{ backgroundColor: eng.color }}></div></td>
-                        <td className="py-2 text-right flex justify-end gap-2">
+                        <td className="py-2 font-bold text-slate-700 w-[30%] pl-2 truncate" title={eng.name}>{eng.name}</td>
+                        <td className="py-2 font-mono text-slate-500 w-[30%] truncate">{eng.password}</td>
+                        <td className="py-2 w-[15%]"><div className="w-4 h-4 rounded-full" style={{ backgroundColor: eng.color }}></div></td>
+                        <td className="py-2 text-right w-[25%] flex justify-end gap-2 pr-2">
                           <button onClick={() => setEditingEngineer({ ...eng })} className="text-brand-600 hover:underline text-xs">編輯</button>
                           <button onClick={() => handleDeleteEngineer(eng.name)} className="text-red-500 hover:underline text-xs">刪除</button>
                         </td>
