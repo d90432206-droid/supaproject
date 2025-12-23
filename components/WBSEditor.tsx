@@ -36,7 +36,7 @@ const parseLocalDate = (d: string | undefined | null) => {
 
 const addDays = (d: string, n: number) => {
     const x = parseLocalDate(d);
-    x.setDate(x.getDate() + n);
+    x.setDate(x.getDate() + Number(n)); // Force cast number
     return toLocalISOString(x);
 };
 
@@ -160,19 +160,26 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
         const validStart = localProject.startDate || toLocalISOString();
         const start = addDays(validStart, -START_OFFSET);
 
-        // Find the latest end date among all tasks
-        const maxTaskEnd = (localProject.tasks || []).reduce((max, t) => {
-            const taskEnd = addDays(t.startDate, t.duration);
-            return taskEnd > max ? taskEnd : max;
-        }, localProject.endDate || validStart);
+        // Robust Date End Calculation
+        let endCandidates = [validStart];
+        if (localProject.endDate) endCandidates.push(localProject.endDate);
 
-        // Use the later of Project End Date or Max Task End Date
-        const effectiveEndDate = (!localProject.endDate || maxTaskEnd > localProject.endDate) ? maxTaskEnd : localProject.endDate;
+        (localProject.tasks || []).forEach(t => {
+            if (t.startDate) {
+                endCandidates.push(addDays(t.startDate, Number(t.duration || 1)));
+            }
+        });
 
-        let duration = effectiveEndDate ? getDaysDiff(validStart, effectiveEndDate) + START_OFFSET + 30 : 60;
+        // Sort to find max (String works for ISO YYYY-MM-DD)
+        endCandidates.sort();
+        const effectiveEndDate = endCandidates[endCandidates.length - 1];
 
-        if (duration > 3650) duration = 3650; // Cap at ~10 years (increased from 1 year)
-        if (duration < 1) duration = 30;
+        // Calculate Duration
+        let duration = getDaysDiff(validStart, effectiveEndDate) + START_OFFSET + 30; // 30 days buffer
+
+        // Safety Caps
+        if (duration > 3650) duration = 3650; // Max 10 years
+        if (duration < 30) duration = 30;     // Min 30 days
 
         const days = [];
         const startDateObj = parseLocalDate(start);
