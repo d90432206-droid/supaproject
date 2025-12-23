@@ -419,12 +419,100 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
             titleDiv.innerHTML = `<span>專案: ${localProject.name}</span> <span class="text-xs text-slate-500 font-mono bg-slate-100 px-2 py-1 rounded">ID: ${localProject.id}</span>${dateRangeHtml}`;
             clone.insertBefore(titleDiv, clone.firstChild);
 
-            // Unroll scrollable areas to ensure full content is visible (standard behavior)
+            // Unroll scrollable areas
             const scrollables = clone.querySelectorAll('.overflow-x-auto, .overflow-auto');
             scrollables.forEach((el) => {
                 (el as HTMLElement).style.overflow = 'visible';
                 (el as HTMLElement).style.width = 'auto';
             });
+
+            // --- Pagination Logic ---
+            // We'll create a new container and append "Pages" to it
+            // Each page contains: Title (Page 1 only?), Timeline Header, and a chunk of Rows
+            // NOTE: We need to clone the Grid Background for each page too, or just accept white background?
+            // The Grid is inside the Body Wrapper. If we slice the Body, we slice the Grid.
+
+            const headerContainer = clone.querySelector('#gantt-header-container'); // Timeline Header
+            const bodyContainer = clone.querySelector('.custom-scroll > div'); // Main relative canvas
+            const allRows = Array.from(clone.querySelectorAll('.gantt-row'));
+
+            // Clean the body container in the clone (remove all rows, keep grid?)
+            // Actually, we will create new pages.
+            // Page Structure:
+            // <div class="page">
+            //   <TitleDiv (Clone) />
+            //   <HeaderContainer (Clone) />
+            //   <BodyContainer (Clone with ONLY subset of rows) />
+            // </div>
+
+            const pdfContainer = document.createElement('div');
+            // A3 Landscape ~ 1122px width. Height ~793px (210mm) for A4 Landscape
+            // Let's assume automatic page breaks by html2pdf between these divs.
+
+            const ROWS_PER_PAGE = 18; // Safe number for A3/A4 Landscape with header
+
+            for (let i = 0; i < allRows.length; i += ROWS_PER_PAGE) {
+                const pageChunk = document.createElement('div');
+                pageChunk.style.position = 'relative';
+                // Force page break after this chunk, except for the last one
+                if (i + ROWS_PER_PAGE < allRows.length) {
+                    pageChunk.style.pageBreakAfter = 'always';
+                    pageChunk.style.marginBottom = '20px';
+                }
+
+                // 1. Append Title (Only on first page? Or all? User asked for Header. 
+                // Usually Project Title is good on all pages for context, or just first.)
+                // Let's put Title on ALL pages for clarity if it's multipage.
+                const titleClone = titleDiv.cloneNode(true) as HTMLElement;
+                pageChunk.appendChild(titleClone);
+
+                // 2. Append Timeline Header
+                if (headerContainer) {
+                    const headerClone = headerContainer.cloneNode(true) as HTMLElement;
+                    headerClone.style.overflow = 'visible'; // Ensure header dates aren't clipped
+                    headerClone.style.width = '100%';
+                    // Fix header scrolling if needed? It should be fine as we unrolled it.
+                    pageChunk.appendChild(headerClone);
+                }
+
+                // 3. Append Body Chunk (Grid + Rows)
+                if (bodyContainer) {
+                    // We clone the body container (which has the GRID).
+                    const bodyClone = bodyContainer.cloneNode(true) as HTMLElement;
+                    // We need to REMOVE rows that are NOT in this chunk.
+                    // But bodyClone is a deep clone, so it has ALL rows.
+                    // We need to match rows in bodyClone to allRows indices.
+                    // Since querySelectorAll returns in document order, we can re-query instructions.
+                    const clonedRows = Array.from(bodyClone.querySelectorAll('.gantt-row'));
+
+                    clonedRows.forEach((row, idx) => {
+                        if (idx < i || idx >= i + ROWS_PER_PAGE) {
+                            row.remove(); // Remove rows not in this page
+                        }
+                    });
+
+                    // Adjust height of bodyClone to fit content? 
+                    // The grid background is `absolute inset-0 h-full`.
+                    // If we remove rows, the container height might collapse or stay huge?
+                    // The container is `relative`. Its height is determined by flow of rows.
+                    // If rows are removed, height shrinks. Grid shrinks. Perfect.
+
+                    // Ensure bodyClone overflow is visible
+                    bodyClone.style.overflow = 'visible';
+                    bodyClone.parentElement!.style.overflow = 'visible'; // The .custom-scroll wrapper
+
+                    // We need to wrap bodyClone in the scroll wrapper style to maintain layout?
+                    // `.custom-scroll > div` is the `bodyContainer`.
+                    // We just append `bodyClone` to the page.
+                    pageChunk.appendChild(bodyClone);
+                }
+
+                pdfContainer.appendChild(pageChunk);
+            }
+
+            // Replace clone content with paginated content
+            clone.innerHTML = '';
+            clone.appendChild(pdfContainer);
 
             // @ts-ignore
             html2pdf().set({
@@ -559,7 +647,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                 {/* Gantt Body */}
                 <div className="flex-1 flex flex-col overflow-hidden bg-white relative">
                     {/* Timeline Header */}
-                    <div className="h-14 bg-slate-50/95 backdrop-blur flex flex-none border-b border-slate-200 z-20">
+                    <div id="gantt-header-container" className="h-14 bg-slate-50/95 backdrop-blur flex flex-none border-b border-slate-200 z-20">
                         {/* Sticky Header - Z-Index 60 to cover Today Line but under Header */}
                         <div className="sticky-left-header w-[160px] md:w-[260px] flex-shrink-0 border-r border-slate-200 bg-slate-50 flex items-center px-4 font-bold text-xs text-slate-600 uppercase shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] z-[60]">任務列表 / WBS</div>
                         <div className="flex-1 overflow-hidden relative" ref={timelineHeaderRef}>
@@ -621,7 +709,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                                 {(localProject.wbs || []).map((cat, i) => (
                                     <div key={cat.id}>
                                         {/* Sticky WBS Header - Z-Index 60 only for left label, Timeline part is transparent/z-0 to show Red Line */}
-                                        <div className="flex h-9 border-t-4 border-double border-slate-300 border-b border-slate-200 group">
+                                        <div className="gantt-row flex h-9 border-t-4 border-double border-slate-300 border-b border-slate-200 group">
                                             {/* Left Sticky Label */}
                                             <div className="sticky left-0 z-[60] bg-slate-50 flex items-center px-4 font-bold text-xs text-slate-700 sticky-left-col border-r border-slate-200 cursor-pointer hover:bg-slate-100"
                                                 style={{ width: sidebarWidth }}
@@ -664,7 +752,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                                         </div>
 
                                         {!cat.collapsed && (localProject.tasks || []).filter(t => t.category === cat.name).map(task => (
-                                            <div key={task.id} className="flex h-9 border-b border-slate-100 relative group hover:bg-blue-50/20">
+                                            <div key={task.id} className="gantt-row flex h-9 border-b border-slate-100 relative group hover:bg-blue-50/20">
                                                 {/* Sticky Task Info - Z-Index 60 to cover Today Line (30) */}
                                                 <div className="sticky left-0 bg-white z-[60] flex items-center px-4 border-r border-slate-200 sticky-left-col shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] cursor-pointer"
                                                     style={{ width: sidebarWidth }}
