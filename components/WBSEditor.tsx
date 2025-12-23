@@ -435,6 +435,14 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                     clone.style.transformOrigin = 'top left';
                     clone.style.width = `${totalWidth}px`; // Force original width for layout
                     clone.style.marginBottom = `-${(1 - scale) * clone.scrollHeight}px`; // Adjust layout flow
+
+                    // Unroll scrollable areas to ensure full content is visible
+                    const scrollables = clone.querySelectorAll('.overflow-x-auto, .overflow-auto');
+                    scrollables.forEach((el) => {
+                        (el as HTMLElement).style.overflow = 'visible';
+                        (el as HTMLElement).style.width = 'auto'; // allow expansion
+                    });
+
                     // We need to wrap it in a container that constraints the width for the PDF generator
                     const wrapper = document.createElement('div');
                     wrapper.style.width = `${targetWidth}px`;
