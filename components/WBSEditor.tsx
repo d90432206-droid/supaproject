@@ -514,6 +514,9 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
             clone.innerHTML = '';
             clone.appendChild(pdfContainer);
 
+            // Append to DOM for Rendering
+            document.body.appendChild(clone);
+
             // @ts-ignore
             html2pdf().set({
                 margin: 0.2,
@@ -522,6 +525,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                 html2canvas: { scale: 2 },
                 jsPDF: { unit: 'in', format: pdfConfig.format, orientation: pdfConfig.orientation }
             }).from(clone).save().then(() => {
+                document.body.removeChild(clone);
                 setShowPdfOptions(false);
             });
         }
@@ -658,7 +662,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                                 <div className="h-7 flex items-center relative">
                                     {renderDays.map(d => (
                                         <div key={d.dateStr}
-                                            className={`h-full border-r border-slate-100 flex justify-center items-center text-[10px] font-bold text-slate-600 cursor-pointer 
+                                            className={`h-full border-r border-slate-100 flex justify-center items-center text-[10px] font-bold text-slate-600 cursor-pointer flex-shrink-0 
                                             ${d.isWeekend ? 'bg-orange-200' : ''} 
                                             ${d.isHoliday ? '!bg-red-100 !text-red-600 !border-b-2 !border-red-400' : ''}
                                             ${(viewMode === 'month' && !d.isWeekend && parseLocalDate(d.dateStr).getDay() === 1) ? 'relative z-10' : ''}
