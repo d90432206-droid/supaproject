@@ -401,9 +401,15 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
 
     const exportPDF = () => {
         // @ts-ignore
-        if (typeof html2pdf === 'undefined') return alert("PDF 元件載入失敗");
-        const el = document.getElementById('gantt-export-area');
-        if (el) {
+        if (typeof html2pdf === 'undefined') return alert("PDF 元件尚未載入，請檢查網路連線或重新整理頁面。");
+
+        try {
+            const el = document.getElementById('gantt-export-area');
+            if (!el) {
+                alert("找不到匯出區域");
+                return;
+            }
+
             const clone = el.cloneNode(true) as HTMLElement;
             clone.classList.add('pdf-visible');
 
@@ -527,7 +533,16 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
             }).from(clone).save().then(() => {
                 document.body.removeChild(clone);
                 setShowPdfOptions(false);
+            }).catch((err: any) => {
+                console.error("PDF Export Error:", err);
+                alert("匯出失敗，請查看 Console 錯誤訊息");
+                if (document.body.contains(clone)) {
+                    document.body.removeChild(clone);
+                }
             });
+        } catch (e) {
+            console.error("PDF Setup Error:", e);
+            alert("匯出設定發生錯誤");
         }
     };
 
@@ -725,7 +740,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                                                 {cat.name}
                                             </div>
                                             {/* Right Timeline Part - Transparent click area */}
-                                            <div className="flex-1 cursor-pointer hover:bg-slate-50/20 z-10 relative"
+                                            <div className="flex-1 cursor-pointer hover:bg-slate-50/20 z-10 relative overflow-hidden"
                                                 onClick={() => {
                                                     const newWbs = localProject.wbs.map(w => w.id === cat.id ? { ...w, collapsed: !w.collapsed } : w);
                                                     setLocalProject({ ...localProject, wbs: newWbs });
