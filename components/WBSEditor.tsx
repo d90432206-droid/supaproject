@@ -384,10 +384,11 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
 
         validTasks.forEach(t => {
             if (t.startDate < minStart) minStart = t.startDate;
-            const end = addDays(t.startDate, t.duration);
+            const duration = Number(t.duration);
+            const end = addDays(t.startDate, duration);
             if (end > maxEnd) maxEnd = end;
-            totalDuration += t.duration;
-            weightedProgress += t.duration * t.progress;
+            totalDuration += duration;
+            weightedProgress += duration * t.progress;
         });
 
         const avgProgress = totalDuration === 0 ? 0 : Math.round(weightedProgress / totalDuration);
@@ -542,7 +543,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
             });
         } catch (e) {
             console.error("PDF Setup Error:", e);
-            alert("匯出設定發生錯誤");
+            alert(`匯出設定發生錯誤: ${e.message || JSON.stringify(e)}`);
         }
     };
 
