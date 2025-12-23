@@ -98,7 +98,7 @@ export const LaborReportModal: React.FC<LaborReportModalProps> = ({ project, log
                             <label className="text-xs font-bold text-slate-500 block mb-1">專案篩選</label>
                             <select value={selectedProjectId} onChange={e => setSelectedProjectId(e.target.value)} className="w-full border rounded px-2 py-1.5 text-sm">
                                 <option value="">全部專案</option>
-                                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                {projects.map(p => <option key={p.id} value={p.id}>[{p.id}] {p.name}</option>)}
                             </select>
                         </div>
                     )}
