@@ -948,6 +948,17 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                                     <input type="checkbox" checked={pdfConfig.showDateRange} onChange={e => setPdfConfig({ ...pdfConfig, showDateRange: e.target.checked })} className="accent-red-600" />
                                     <span className="text-sm text-slate-700">在標題顯示專案期間</span>
                                 </label>
+                                <div>
+                                    <label className="text-xs font-bold text-slate-500 block mb-1">尾段延伸空白 (月)</label>
+                                    <select value={pdfConfig.extendMonths} onChange={e => setPdfConfig({ ...pdfConfig, extendMonths: Number(e.target.value) })} className="w-full border rounded px-2 py-1 text-sm bg-white">
+                                        <option value={0}>不延伸</option>
+                                        <option value={1}>+ 1 個月</option>
+                                        <option value={2}>+ 2 個月</option>
+                                        <option value={3}>+ 3 個月</option>
+                                        <option value={6}>+ 6 個月</option>
+                                        <option value={12}>+ 1 年</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
                         <div className="flex gap-2">
