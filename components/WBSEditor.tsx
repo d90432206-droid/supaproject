@@ -79,7 +79,8 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
     const [pdfConfig, setPdfConfig] = useState({
         format: 'a3' as 'a3' | 'a4',
         orientation: 'landscape' as 'landscape' | 'portrait',
-        showDateRange: true
+        showDateRange: true,
+        fitToPage: true
     });
 
     // Default stats date to Project Start Date to ensure data visibility
@@ -353,12 +354,16 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
         const tasks = (localProject.tasks || []).filter(t => t.category === category);
         if (tasks.length === 0) return null;
 
-        let minStart = tasks[0].startDate;
-        let maxEnd = addDays(tasks[0].startDate, tasks[0].duration);
+        // Ensure valid dates
+        const validTasks = tasks.filter(t => t.startDate && t.duration > 0);
+        if (validTasks.length === 0) return null;
+
+        let minStart = validTasks[0].startDate;
+        let maxEnd = addDays(validTasks[0].startDate, validTasks[0].duration);
         let totalDuration = 0;
         let weightedProgress = 0;
 
-        tasks.forEach(t => {
+        validTasks.forEach(t => {
             if (t.startDate < minStart) minStart = t.startDate;
             const end = addDays(t.startDate, t.duration);
             if (end > maxEnd) maxEnd = end;
@@ -394,6 +399,42 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
 
             titleDiv.innerHTML = `<span>專案: ${localProject.name}</span> <span class="text-xs text-slate-500 font-mono bg-slate-100 px-2 py-1 rounded">ID: ${localProject.id}</span>${dateRangeHtml}`;
             clone.insertBefore(titleDiv, clone.firstChild);
+
+            // Fit to Page Logic
+            if (pdfConfig.fitToPage) {
+                const totalWidth = sidebarWidth + totalContentWidth;
+                // Approx usable width for A4/A3 Landscape in pixels (assuming 96DPI)
+                // A4 Landscape: ~1122px, A3 Landscape: ~1587px
+                // We leave some margin (approx 50px)
+                const targetWidth = pdfConfig.format === 'a3' ? 1500 : 1050;
+
+                if (totalWidth > targetWidth) {
+                    const scale = targetWidth / totalWidth;
+                    clone.style.transform = `scale(${scale})`;
+                    clone.style.transformOrigin = 'top left';
+                    clone.style.width = `${totalWidth}px`; // Force original width for layout
+                    clone.style.marginBottom = `-${(1 - scale) * clone.scrollHeight}px`; // Adjust layout flow
+                    // We need to wrap it in a container that constraints the width for the PDF generator
+                    const wrapper = document.createElement('div');
+                    wrapper.style.width = `${targetWidth}px`;
+                    wrapper.style.overflow = 'hidden';
+                    wrapper.appendChild(clone);
+                    document.body.appendChild(wrapper);
+
+                    // @ts-ignore
+                    html2pdf().set({
+                        margin: 0.2,
+                        filename: `${localProject.name}.pdf`,
+                        image: { type: 'jpeg', quality: 0.98 },
+                        html2canvas: { scale: 2 }, // Keep high res capture
+                        jsPDF: { unit: 'in', format: pdfConfig.format, orientation: pdfConfig.orientation }
+                    }).from(wrapper).save().then(() => {
+                        document.body.removeChild(wrapper);
+                        setShowPdfOptions(false);
+                    });
+                    return;
+                }
+            }
 
             document.body.appendChild(clone);
             // @ts-ignore
@@ -612,11 +653,19 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                                                     if (!summary) return null;
                                                     const left = getDaysDiff(renderStart, summary.start) * colWidth;
                                                     const width = getDaysDiff(summary.start, summary.end) * colWidth;
+                                                    const isOverdue = summary.progress < 100 && parseLocalDate(summary.end) < new Date();
+
                                                     return (
-                                                        <div className="absolute h-5 top-2 bg-slate-400/30 rounded border border-slate-400/50 flex items-center overflow-hidden"
-                                                            style={{ left, width }}>
-                                                            <div className="bg-slate-500 h-full opacity-60" style={{ width: `${summary.progress}%` }}></div>
-                                                            <span className="absolute px-2 text-[10px] text-slate-700 font-bold whitespace-nowrap">{summary.progress}% ({summary.start} ~ {summary.end})</span>
+                                                        <div className={`absolute h-5 top-2 rounded border flex items-center overflow-hidden
+                                                            ${isOverdue ? 'bg-red-50/50 border-red-300' : 'bg-indigo-50/50 border-indigo-200'}
+                                                        `}
+                                                            style={{ left, width }}
+                                                            title={`WBS 摘要: ${summary.progress}% \n期間: ${summary.start} ~ ${summary.end}`}
+                                                        >
+                                                            <div className={`${isOverdue ? 'bg-red-400' : 'bg-indigo-400'} h-full opacity-60`} style={{ width: `${summary.progress}%` }}></div>
+                                                            <span className={`absolute px-2 text-[10px] font-bold whitespace-nowrap ${isOverdue ? 'text-red-700' : 'text-indigo-700'}`}>
+                                                                {summary.progress}%
+                                                            </span>
                                                         </div>
                                                     );
                                                 })()}
@@ -872,10 +921,16 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                                     <button onClick={() => setPdfConfig({ ...pdfConfig, orientation: 'landscape' })} className={`flex-1 py-2 text-xs font-bold rounded border ${pdfConfig.orientation === 'landscape' ? 'bg-red-50 border-red-500 text-red-600' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>橫向</button>
                                 </div>
                             </div>
-                            <label className="flex items-center gap-2 cursor-pointer p-2 border border-slate-100 rounded hover:bg-slate-50">
-                                <input type="checkbox" checked={pdfConfig.showDateRange} onChange={e => setPdfConfig({ ...pdfConfig, showDateRange: e.target.checked })} className="accent-red-600" />
-                                <span className="text-sm text-slate-700">在標題顯示專案期間</span>
-                            </label>
+                            <div className="flex flex-col gap-2">
+                                <label className="flex items-center gap-2 cursor-pointer p-2 border border-slate-100 rounded hover:bg-slate-50">
+                                    <input type="checkbox" checked={pdfConfig.fitToPage} onChange={e => setPdfConfig({ ...pdfConfig, fitToPage: e.target.checked })} className="accent-red-600" />
+                                    <span className="text-sm text-slate-700">自動縮放至單頁寬度 (Fit Width)</span>
+                                </label>
+                                <label className="flex items-center gap-2 cursor-pointer p-2 border border-slate-100 rounded hover:bg-slate-50">
+                                    <input type="checkbox" checked={pdfConfig.showDateRange} onChange={e => setPdfConfig({ ...pdfConfig, showDateRange: e.target.checked })} className="accent-red-600" />
+                                    <span className="text-sm text-slate-700">在標題顯示專案期間</span>
+                                </label>
+                            </div>
                         </div>
                         <div className="flex gap-2">
                             <button onClick={() => setShowPdfOptions(false)} className="flex-1 py-2 bg-slate-100 text-slate-600 rounded text-xs font-bold hover:bg-slate-200">取消</button>
