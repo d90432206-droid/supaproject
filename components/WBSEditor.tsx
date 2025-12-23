@@ -481,6 +481,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                                             className={`h-full border-r border-slate-100 flex justify-center items-center text-[10px] font-bold text-slate-600 cursor-pointer 
                                             ${d.isWeekend ? 'bg-orange-200' : ''} 
                                             ${d.isHoliday ? '!bg-red-100 !text-red-600 !border-b-2 !border-red-400' : ''}
+                                            ${(viewMode === 'month' && !d.isWeekend && parseLocalDate(d.dateStr).getDay() === 1) ? 'relative z-10' : ''}
                                          `}
                                             style={{ width: colWidth }}
                                             onClick={() => {
