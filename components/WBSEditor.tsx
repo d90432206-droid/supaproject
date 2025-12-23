@@ -74,6 +74,14 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
     // Report Modal
     const [showReportModal, setShowReportModal] = useState(false);
 
+    // PDF Options Modal
+    const [showPdfOptions, setShowPdfOptions] = useState(false);
+    const [pdfConfig, setPdfConfig] = useState({
+        format: 'a3' as 'a3' | 'a4',
+        orientation: 'landscape' as 'landscape' | 'portrait',
+        showDateRange: true
+    });
+
     // Default stats date to Project Start Date to ensure data visibility
     const [statsWeeklyDate, setStatsWeeklyDate] = useState(
         project.startDate ? project.startDate : toLocalISOString()
@@ -341,13 +349,6 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
         return grouped;
     }, [logs, weekDays, project.id, project.name]);
 
-    const [showPdfOptions, setShowPdfOptions] = useState(false);
-    const [pdfConfig, setPdfConfig] = useState({
-        format: 'a3' as 'a3' | 'a4',
-        orientation: 'landscape' as 'landscape' | 'portrait',
-        showDateRange: true
-    });
-
     const getWBSSummary = (category: string) => {
         const tasks = (localProject.tasks || []).filter(t => t.category === category);
         if (tasks.length === 0) return null;
@@ -394,9 +395,6 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
             titleDiv.innerHTML = `<span>專案: ${localProject.name}</span> <span class="text-xs text-slate-500 font-mono bg-slate-100 px-2 py-1 rounded">ID: ${localProject.id}</span>${dateRangeHtml}`;
             clone.insertBefore(titleDiv, clone.firstChild);
 
-            // Temporarily Force Full Width for PDF to prevent cut-off
-            // clone.style.width = '2000px'; // Optional safety if needed
-
             document.body.appendChild(clone);
             // @ts-ignore
             html2pdf().set({
@@ -412,211 +410,482 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
         }
     };
 
-    // ... (Inside render -> WBS Header) ...
-    /* 
-       We will insert the summary rendering logic inside the main render loop below 
-       but first, let's update this block for state/export logic.
-    */
+    const handleAddTask = () => {
+        // 預設選中第一個分類，避免使用者未選擇時造成空值
+        const defaultCategory = (localProject.wbs && localProject.wbs.length > 0) ? localProject.wbs[0].name : '';
+        setEditingTask({
+            category: defaultCategory,
+            startDate: localProject.startDate || toLocalISOString(),
+            duration: 1,
+            progress: 0,
+            title: '',
+            assignee: '',
+            delayReason: ''
+        });
+        setShowEditModal(true);
+    };
 
-    // ... 
+    const saveTask = () => {
+        let finalTask = { ...editingTask };
 
-    // RENDER RETURN BLOCK UPDATES will be done in next chunks if needed, but here we cover logic. 
-    // Button Action change:
-    // <button onClick={() => setShowPdfOptions(true)} ...> instead of direct exportPDF 
+        // 防呆：如果分類為空 (使用者可能未操作選單)，強制設為第一個分類
+        if (!finalTask.category && localProject.wbs && localProject.wbs.length > 0) {
+            finalTask.category = localProject.wbs[0].name;
+        }
 
-    // ...
+        let newTasks = [...(localProject.tasks || [])];
+        if (finalTask.id) {
+            const idx = newTasks.findIndex(t => t.id === finalTask.id);
+            if (idx !== -1) newTasks[idx] = finalTask as Task;
+        } else {
+            newTasks.push({
+                ...finalTask,
+                id: Date.now(),
+                actualHours: 0,
+                title: finalTask.title || '新任務',
+                startDate: finalTask.startDate || toLocalISOString(),
+                duration: finalTask.duration || 1,
+                progress: finalTask.progress || 0
+            } as Task);
+        }
+        setLocalProject({ ...localProject, tasks: newTasks });
+        setShowEditModal(false);
+    };
 
-    // Re-inserting the previous button logic here to match target content for replacement:
-    <button onClick={() => setShowReportModal(true)} className="bg-brand-600 hover:bg-brand-700 text-white border border-brand-700 px-3 py-1 rounded text-xs font-bold shadow-sm flex items-center transition-colors">
-        <i className="fa-solid fa-table-list mr-1.5"></i>詳細報表
-    </button>
-                    </div >
-                </div >
-    <div className="flex-1 overflow-auto custom-scroll">
-        <table className="w-full text-xs text-left">
-            <thead className="text-slate-500 bg-slate-50 sticky top-0">
-                <tr>
-                    <th className="px-4 py-2">人員</th>
-                    {weekDays.map(d => (
-                        <th key={d.dateStr} className="px-2 py-2 text-center border-l border-slate-100">
-                            <div>{d.label}</div>
-                            <div className="text-[9px] font-normal">{d.dateStr.slice(5)}</div>
-                        </th>
-                    ))}
-                    <th className="px-4 py-2 text-right">總計</th>
-                </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-                {Object.entries(weeklyStatsData).length === 0 ? (
-                    <tr><td colSpan={9} className="text-center py-8 text-slate-400">本週無工時紀錄</td></tr>
-                ) : Object.entries(weeklyStatsData).map(([eng, days]) => (
-                    <tr key={eng}>
-                        <td className="px-4 py-2 font-bold text-slate-700">{eng}</td>
-                        {weekDays.map(d => (
-                            <td key={d.dateStr} className="px-2 py-2 text-center border-l border-slate-100 font-mono">
-                                {days[d.dateStr] ? <span className="font-bold text-brand-600">{days[d.dateStr]}</span> : <span className="text-slate-200">-</span>}
-                            </td>
-                        ))}
-                        <td className="px-4 py-2 text-right font-bold text-slate-800">
-                            {Object.values(days).reduce((a, b) => a + b, 0)}
-                        </td>
-                    </tr>
-                ))}
-            </tbody>
-        </table>
-    </div>
-            </div >
+    const deleteTask = () => {
+        if (!confirm("確定刪除此任務？")) return;
+        const newTasks = (localProject.tasks || []).filter(t => t.id !== editingTask.id);
+        setLocalProject({ ...localProject, tasks: newTasks });
+        setShowEditModal(false);
+    };
 
-    {/* --- MODALS --- */ }
-{/* Task Edit Modal */ }
-{
-    showEditModal && (
-        <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6">
-                <h3 className="font-bold text-lg mb-4">{editingTask.id ? '編輯任務' : '新增任務'}</h3>
-                <div className="space-y-3">
-                    <div><label className="text-xs font-bold text-slate-500 block mb-1">任務名稱</label><input value={editingTask.title || ''} onChange={e => setEditingTask({ ...editingTask, title: e.target.value })} className="w-full border rounded px-3 py-2 text-sm" placeholder="例如: 需求訪談" /></div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="text-xs font-bold text-slate-500 block mb-1">WBS 階段</label>
-                            <select value={editingTask.category || ''} onChange={e => setEditingTask({ ...editingTask, category: e.target.value })} className="w-full border rounded px-3 py-2 text-sm">
-                                {(localProject.wbs || []).map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="text-xs font-bold text-slate-500 block mb-1">負責人</label>
-                            <select value={editingTask.assignee || ''} onChange={e => setEditingTask({ ...editingTask, assignee: e.target.value })} className="w-full border rounded px-3 py-2 text-sm">
-                                <option value="">未指定</option>
-                                {(localProject.engineers || []).map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
-                            </select>
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div><label className="text-xs font-bold text-slate-500 block mb-1">開始日期</label><input type="date" value={editingTask.startDate || ''} onChange={e => setEditingTask({ ...editingTask, startDate: e.target.value })} className="w-full border rounded px-3 py-2 text-sm" /></div>
-                        <div><label className="text-xs font-bold text-slate-500 block mb-1">工期 (天)</label><input type="number" value={editingTask.duration || 1} onChange={e => setEditingTask({ ...editingTask, duration: Number(e.target.value) })} className="w-full border rounded px-3 py-2 text-sm" /></div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div><label className="text-xs font-bold text-slate-500 block mb-1">進度 %</label><input type="number" min="0" max="100" value={editingTask.progress || 0} onChange={e => setEditingTask({ ...editingTask, progress: Number(e.target.value) })} className="w-full border rounded px-3 py-2 text-sm" /></div>
-                        <div><label className="text-xs font-bold text-slate-500 block mb-1">延遲原因</label><input value={editingTask.delayReason || ''} onChange={e => setEditingTask({ ...editingTask, delayReason: e.target.value })} className="w-full border rounded px-3 py-2 text-sm" placeholder="若有延遲請說明..." /></div>
+    const toggleProjectEngineer = (eng: GlobalEngineer) => {
+        const exists = (localProject.engineers || []).some(e => e.name === eng.name);
+        let newEngineers = [...(localProject.engineers || [])];
+        if (exists) {
+            newEngineers = newEngineers.filter(e => e.name !== eng.name);
+        } else {
+            newEngineers.push({ id: `e${Date.now()}`, name: eng.name, color: eng.color });
+        }
+        setLocalProject({ ...localProject, engineers: newEngineers });
+    };
+
+    return (
+        <div className={`flex flex-col h-full bg-[#f8fafc] text-sm font-sans absolute inset-0 z-50 ${draggingState.isDragging ? 'cursor-grabbing select-none' : ''}`}>
+            {/* Header - Z-Index 70 to stay on top */}
+            <header className="h-12 bg-white border-b border-slate-200 flex items-center justify-between px-2 md:px-5 shrink-0 shadow-sm z-[70]">
+                <div className="flex items-center gap-2 md:gap-3 overflow-hidden">
+                    <button onClick={handleCloseAttempt} className="text-xs font-bold text-slate-500 hover:text-brand-600 flex items-center gap-1 shrink-0"><i className="fa-solid fa-arrow-left"></i> 返回</button>
+                    <div className="h-4 w-px bg-slate-300 mx-1 shrink-0"></div>
+                    <div className="font-bold text-slate-700 flex items-center gap-2 truncate">
+                        <span className="truncate max-w-[100px] md:max-w-none">{localProject.name}</span>
+                        {hasUnsavedChanges && <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold animate-pulse shrink-0">未儲存</span>}
                     </div>
                 </div>
-                <div className="mt-6 flex justify-between">
-                    {editingTask.id && <button onClick={deleteTask} className="text-red-500 font-bold text-xs hover:underline">刪除任務</button>}
-                    <div className="flex gap-2 ml-auto">
-                        <button onClick={() => setShowEditModal(false)} className="px-4 py-2 text-slate-500 font-bold text-xs hover:bg-slate-100 rounded">取消</button>
-                        <button onClick={saveTask} className="px-4 py-2 bg-brand-600 text-white font-bold text-xs rounded shadow">確認</button>
-                    </div>
+                <div className="flex gap-1 md:gap-2 shrink-0">
+                    <button onClick={() => setShowTeamModal(true)} className="px-2 md:px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-md text-xs font-bold hover:bg-slate-50"><i className="fa-solid fa-users-gear md:mr-1.5"></i><span className="hidden md:inline">團隊成員</span></button>
+                    <button onClick={() => setShowPdfOptions(true)} className="px-2 md:px-3 py-1.5 bg-white border border-red-100 text-red-600 rounded-md text-xs font-bold hover:bg-red-50"><i className="fa-solid fa-file-pdf md:mr-1.5"></i>PDF</button>
+                    <button onClick={() => onUpdate(localProject)} className="px-3 md:px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md font-bold text-xs shadow-md"><i className="fa-solid fa-save md:mr-1.5"></i>儲存 WBS</button>
                 </div>
-            </div>
-        </div>
-    )
-}
+            </header>
 
-{/* Team Modal */ }
-{
-    showTeamModal && (
-        <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-sm p-6 max-h-[80vh] flex flex-col">
-                <h3 className="font-bold text-lg mb-4">團隊成員管理</h3>
-                <div className="flex-1 overflow-y-auto custom-scroll space-y-2 mb-4">
-                    {globalEngineers.map(eng => {
-                        const isMember = (localProject.engineers || []).some(e => e.name === eng.name);
-                        const isPM = localProject.manager === eng.name;
-                        return (
-                            <div key={eng.name} className={`flex items-center justify-between p-2 rounded border ${isMember ? 'bg-brand-50 border-brand-200' : 'border-slate-100'}`}>
-                                <label className="flex items-center gap-3 cursor-pointer flex-1">
-                                    <input type="checkbox" checked={isMember} onChange={() => toggleProjectEngineer(eng)} className="accent-brand-600 w-4 h-4" />
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: eng.color }}></div>
-                                        <span className={`text-sm ${isMember ? 'font-bold text-brand-800' : 'text-slate-500'}`}>{eng.name}</span>
-                                    </div>
-                                </label>
-                                {isMember && (
-                                    <button onClick={() => togglePM(eng.name)} className={`text-lg transition-colors ${isPM ? 'text-yellow-500' : 'text-slate-200 hover:text-yellow-300'}`} title={isPM ? "取消負責人" : "設為負責人"}>
-                                        <i className="fa-solid fa-crown"></i>
-                                    </button>
-                                )}
+            {/* Main Content */}
+            <div id="gantt-export-area" className="flex-1 overflow-hidden bg-[#f8fafc] flex flex-col relative border-b border-slate-200">
+                {/* Dashboard Controls */}
+                <div className="px-2 md:px-5 py-4 shrink-0 bg-white border-b border-slate-200 z-20 shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)]">
+                    <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+                        <div><label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">開始日期</label><input type="date" value={localProject.startDate} onChange={e => setLocalProject({ ...localProject, startDate: e.target.value })} className="w-full border rounded px-2 py-1 text-xs font-mono" /></div>
+                        <div><label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">結束日期</label><input type="date" value={localProject.endDate || ''} onChange={e => setLocalProject({ ...localProject, endDate: e.target.value })} className="w-full border rounded px-2 py-1 text-xs font-mono" /></div>
+                        <div>
+                            <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">WBS 階段</label>
+                            <div className="flex gap-1">
+                                <button onClick={() => setShowWBSModal(true)} className="flex-1 border rounded px-2 py-1 text-xs font-bold bg-slate-50 hover:bg-white text-slate-600 text-left truncate"><i className="fa-solid fa-list-check mr-1.5"></i>編輯</button>
+                                <button onClick={() => toggleAllWBS(false)} className="w-8 border rounded flex items-center justify-center bg-white hover:bg-slate-50 text-slate-500" title="全部展開"><i className="fa-solid fa-angles-down"></i></button>
+                                <button onClick={() => toggleAllWBS(true)} className="w-8 border rounded flex items-center justify-center bg-white hover:bg-slate-50 text-slate-500" title="全部收合"><i className="fa-solid fa-angles-up"></i></button>
                             </div>
-                        );
-                    })}
-                </div>
-                <button onClick={() => setShowTeamModal(false)} className="w-full bg-slate-800 text-white py-2 rounded text-xs font-bold">完成</button>
-            </div>
-        </div>
-    )
-}
-
-{/* WBS Modal */ }
-{
-    showWBSModal && (
-        <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
-                <h3 className="font-bold text-lg mb-4">WBS 階段管理</h3>
-                <div className="space-y-2 mb-4 max-h-[60vh] overflow-y-auto">
-                    {(localProject.wbs || []).map((w, i) => (
-                        <div key={w.id} className="flex gap-2">
-                            <input value={w.name} onChange={e => {
-                                const newName = e.target.value;
-                                const oldName = localProject.wbs[i].name;
-                                const newWbs = [...localProject.wbs];
-                                newWbs[i].name = newName;
-
-                                // Also update tasks associated with this WBS category to prevent orphan tasks
-                                const newTasks = (localProject.tasks || []).map(t =>
-                                    t.category === oldName ? { ...t, category: newName } : t
-                                );
-
-                                setLocalProject({ ...localProject, wbs: newWbs, tasks: newTasks });
-                            }} className="flex-1 border rounded px-2 py-1 text-sm" />
-                            <button onClick={() => {
-                                const newWbs = localProject.wbs.filter((_, idx) => idx !== i);
-                                setLocalProject({ ...localProject, wbs: newWbs });
-                            }} className="text-red-400 hover:text-red-600"><i className="fa-solid fa-trash"></i></button>
                         </div>
-                    ))}
-                    <button onClick={() => setLocalProject({ ...localProject, wbs: [...localProject.wbs, { id: Date.now(), name: '新階段', collapsed: false }] })} className="w-full border border-dashed py-2 text-xs font-bold text-slate-400 hover:text-brand-600 hover:border-brand-300">+ 新增階段</button>
+                    </div>
                 </div>
-                <button onClick={() => setShowWBSModal(false)} className="w-full bg-slate-800 text-white py-2 rounded text-xs font-bold">完成</button>
-            </div>
-        </div>
-    )
-}
 
-{/* Delay Reason Modal */ }
-{
-    showDelayModal && (
-        <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-sm p-6 border-l-4 border-amber-500">
-                <h3 className="font-bold text-lg mb-2 text-slate-800"><i className="fa-solid fa-triangle-exclamation text-amber-500 mr-2"></i>任務延遲確認</h3>
-                <p className="text-xs text-slate-500 mb-4">您將任務結束日期往後調整了，請說明延遲原因以利追蹤。</p>
-                <textarea
-                    value={delayReasonInput}
-                    onChange={e => setDelayReasonInput(e.target.value)}
-                    className="w-full border border-slate-300 rounded p-2 text-sm mb-4 h-24 focus:ring-2 focus:ring-amber-500 outline-none"
-                    placeholder="請輸入原因 (必填)..."
+                {/* Toolbar */}
+                <div className="px-2 md:px-5 py-2 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0 z-20 overflow-x-auto gap-2">
+                    <div className="flex items-center gap-2 md:gap-3 shrink-0">
+                        <div className="flex bg-white p-1 rounded-lg border border-slate-200 shadow-sm">
+                            {(['day', 'week', 'month'] as const).map(mode => (
+                                <button key={mode} onClick={() => { setViewMode(mode); setColWidth(mode === 'day' ? 40 : mode === 'week' ? 20 : 10); }} className={`px-2 py-1 rounded-md text-xs ${viewMode === mode ? 'bg-brand-50 text-brand-600 font-bold' : 'text-slate-500'}`}>{mode === 'day' ? '日視圖' : mode === 'week' ? '週視圖' : '月視圖'}</button>
+                            ))}
+                        </div>
+                        {/* Zoom Buttons */}
+                        <button onClick={() => { setColWidth(c => Math.max(10, c - 5)); setViewMode('custom'); }} className="p-1.5 text-slate-500 bg-white border rounded shadow-sm hover:bg-slate-50" title="縮小 (Ctrl+滾輪)"><i className="fa-solid fa-magnifying-glass-minus text-xs"></i></button>
+                        <button onClick={() => { setColWidth(c => Math.min(200, c + 5)); setViewMode('custom'); }} className="p-1.5 text-slate-500 bg-white border rounded shadow-sm hover:bg-slate-50" title="放大 (Ctrl+滾輪)"><i className="fa-solid fa-magnifying-glass-plus text-xs"></i></button>
+                        <button onClick={scrollToToday} className="px-3 py-1 bg-red-500 text-white text-xs font-bold rounded shadow-sm hover:bg-red-600 flex items-center"><i className="fa-solid fa-calendar-day mr-1"></i> TODAY</button>
+                    </div>
+                    {canEditTasks && (
+                        <button onClick={handleAddTask} className="bg-brand-600 text-white py-1.5 px-3 rounded-md text-xs font-bold shadow-sm flex-shrink-0"><i className="fa-solid fa-plus mr-1"></i>新增任務</button>
+                    )}
+                </div>
+
+                {/* Gantt Body */}
+                <div className="flex-1 flex flex-col overflow-hidden bg-white relative">
+                    {/* Timeline Header */}
+                    <div className="h-14 bg-slate-50/95 backdrop-blur flex flex-none border-b border-slate-200 z-20">
+                        {/* Sticky Header - Z-Index 60 to cover Today Line but under Header */}
+                        <div className="sticky-left-header w-[160px] md:w-[260px] flex-shrink-0 border-r border-slate-200 bg-slate-50 flex items-center px-4 font-bold text-xs text-slate-600 uppercase shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] z-[60]">任務列表 / WBS</div>
+                        <div className="flex-1 overflow-hidden relative" ref={timelineHeaderRef}>
+                            <div className="flex flex-col h-full bg-white" style={{ width: totalContentWidth }}>
+                                <div className="h-7 border-b border-slate-100 flex items-center font-bold text-xs text-slate-500 bg-slate-50">
+                                    {headerTopRow.map((item, i) => <div key={i} className="pl-3 border-r border-slate-200 h-full flex items-center" style={{ width: item.width }}>{item.label}</div>)}
+                                </div>
+                                <div className="h-7 flex items-center relative">
+                                    {renderDays.map(d => (
+                                        <div key={d.dateStr}
+                                            className={`h-full border-r border-slate-100 flex justify-center items-center text-[10px] font-bold text-slate-600 cursor-pointer 
+                                            ${d.isWeekend ? 'bg-orange-200' : ''} 
+                                            ${d.isHoliday ? '!bg-red-100 !text-red-600 !border-b-2 !border-red-400' : ''}
+                                            ${(viewMode === 'month' && !d.isWeekend && parseLocalDate(d.dateStr).getDay() === 1) ? 'relative z-10' : ''}
+                                         `}
+                                            style={{ width: colWidth }}
+                                            onClick={() => {
+                                                const newHolidays = d.isHoliday ? (localProject.holidays || []).filter(h => h !== d.dateStr) : [...(localProject.holidays || []), d.dateStr];
+                                                setLocalProject({ ...localProject, holidays: newHolidays });
+                                            }}
+                                            title={d.isHoliday ? '取消休假' : '設為休假'}
+                                        >
+                                            {viewMode === 'month' ? (
+                                                d.isWeekend ? '' : (parseLocalDate(d.dateStr).getDay() === 1 ? `W${getISOWeek(parseLocalDate(d.dateStr))}` : '')
+                                            ) : d.label}
+                                        </div>
+                                    ))}
+                                    {/* Today Line in Header (Triangle Indicator) - No background line to avoid covering date text */}
+                                    {todayOffset >= 0 && (
+                                        <div className="absolute top-0 bottom-0 z-50 pointer-events-none" style={{ left: todayOffset + (colWidth / 2) }}>
+                                            <div className="absolute top-0 left-0 -translate-x-1/2 text-red-500 text-[10px]"><i className="fa-solid fa-caret-down"></i></div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex-1 overflow-auto custom-scroll relative" ref={ganttBodyRef} onScroll={e => timelineHeaderRef.current && (timelineHeaderRef.current.scrollLeft = (e.target as HTMLElement).scrollLeft)}>
+                        <div className="relative min-h-full" style={{ width: sidebarWidth + totalContentWidth }}>
+                            {/* Background Grid */}
+                            <div className="absolute inset-0 flex pointer-events-none z-0" style={{ paddingLeft: sidebarWidth }}>
+                                {renderDays.map(d => (
+                                    <div key={`bg-${d.dateStr}`} className={`flex-shrink-0 border-r border-slate-200 h-full box-border ${d.isWeekend ? 'bg-orange-50' : ''} ${d.isHoliday ? '!bg-red-50' : ''}`} style={{ width: colWidth }}></div>
+                                ))}
+                            </div>
+
+                            {/* Today Line - Z-Index 30: Above Grid (0) and Static Bars (10), but below Sticky Cols (60) */}
+                            {todayOffset >= 0 && (
+                                <div className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-30 pointer-events-none" style={{ left: sidebarWidth + todayOffset + (colWidth / 2) }}>
+                                    {/* Caret removed from body to avoid duplication, now in Header */}
+                                </div>
+                            )}
+
+                            {/* Task Rows */}
+                            <div className="relative">
+                                {(localProject.wbs || []).map((cat, i) => (
+                                    <div key={cat.id}>
+                                        {/* Sticky WBS Header - Z-Index 60 only for left label, Timeline part is transparent/z-0 to show Red Line */}
+                                        <div className="flex h-9 border-t-4 border-double border-slate-300 border-b border-slate-200 group">
+                                            {/* Left Sticky Label */}
+                                            <div className="sticky left-0 z-[60] bg-slate-50 flex items-center px-4 font-bold text-xs text-slate-700 sticky-left-col border-r border-slate-200 cursor-pointer hover:bg-slate-100"
+                                                style={{ width: sidebarWidth }}
+                                                onClick={() => {
+                                                    const newWbs = localProject.wbs.map(w => w.id === cat.id ? { ...w, collapsed: !w.collapsed } : w);
+                                                    setLocalProject({ ...localProject, wbs: newWbs });
+                                                }}>
+                                                <i className={`fa-solid fa-caret-down mr-2 transition-transform ${cat.collapsed ? '-rotate-90' : ''}`}></i>
+                                                {cat.name}
+                                            </div>
+                                            {/* Right Timeline Part - Transparent click area */}
+                                            <div className="flex-1 cursor-pointer hover:bg-slate-50/20 z-10 relative"
+                                                onClick={() => {
+                                                    const newWbs = localProject.wbs.map(w => w.id === cat.id ? { ...w, collapsed: !w.collapsed } : w);
+                                                    setLocalProject({ ...localProject, wbs: newWbs });
+                                                }}>
+                                                {/* Show Summary Bar if Collapsed */}
+                                                {cat.collapsed && (() => {
+                                                    const summary = getWBSSummary(cat.name);
+                                                    if (!summary) return null;
+                                                    const left = getDaysDiff(renderStart, summary.start) * colWidth;
+                                                    const width = getDaysDiff(summary.start, summary.end) * colWidth;
+                                                    return (
+                                                        <div className="absolute h-5 top-2 bg-slate-400/30 rounded border border-slate-400/50 flex items-center overflow-hidden"
+                                                            style={{ left, width }}>
+                                                            <div className="bg-slate-500 h-full opacity-60" style={{ width: `${summary.progress}%` }}></div>
+                                                            <span className="absolute px-2 text-[10px] text-slate-700 font-bold whitespace-nowrap">{summary.progress}% ({summary.start} ~ {summary.end})</span>
+                                                        </div>
+                                                    );
+                                                })()}
+                                            </div>
+                                        </div>
+
+                                        {!cat.collapsed && (localProject.tasks || []).filter(t => t.category === cat.name).map(task => (
+                                            <div key={task.id} className="flex h-9 border-b border-slate-100 relative group hover:bg-blue-50/20">
+                                                {/* Sticky Task Info - Z-Index 60 to cover Today Line (30) */}
+                                                <div className="sticky left-0 bg-white z-[60] flex items-center px-4 border-r border-slate-200 sticky-left-col shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] cursor-pointer"
+                                                    style={{ width: sidebarWidth }}
+                                                    onClick={() => { setEditingTask({ ...task }); setShowEditModal(true); }}>
+                                                    <div className="w-full truncate">
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="text-xs font-medium text-slate-700 truncate">{task.title}</span>
+                                                            {task.delayReason && <i className="fa-solid fa-circle-exclamation text-amber-500 text-[10px] ml-1" title={`延遲原因: ${task.delayReason}`}></i>}
+                                                        </div>
+                                                        <div className="w-full h-3 bg-slate-100 rounded-full mt-0.5 overflow-hidden relative border border-slate-200">
+                                                            <div className="h-full bg-brand-500" style={{ width: `${task.progress}%` }}></div>
+                                                            <div className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-slate-600 leading-none drop-shadow-sm">{task.progress}%</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                {/* Task Bar */}
+                                                <div className="relative h-full w-full">
+                                                    <div
+                                                        className={`absolute h-5 top-2 rounded-sm shadow-sm flex items-center px-2 text-[10px] text-white font-bold whitespace-nowrap overflow-hidden border border-white/20 select-none
+                                                        ${draggingState.task?.id === task.id ? 'opacity-80 scale-[1.01] shadow-xl ring-2 ring-white z-50 cursor-grabbing' : 'cursor-grab hover:brightness-110 z-10'}
+                                                    `}
+                                                        style={{
+                                                            left: getTaskLeft(task),
+                                                            width: Math.max(colWidth, task.duration * colWidth),
+                                                            backgroundColor: getAssigneeColor(task.assignee)
+                                                        }}
+                                                        onMouseDown={(e) => handleMouseDown(task, e)}
+                                                    >
+                                                        {task.progress}%
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Weekly Stats Footer */}
+            <div className="h-48 shrink-0 bg-white border-t border-slate-200 flex flex-col">
+                <div className="px-4 py-2 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                    <h4 className="font-bold text-xs text-brand-600"><i className="fa-solid fa-chart-simple mr-2"></i>本專案每週工時統計</h4>
+                    <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-slate-400">週次基準日:</span>
+                        <input type="date" value={statsWeeklyDate} onChange={e => setStatsWeeklyDate(e.target.value)} className="border rounded px-2 py-0.5 text-xs font-mono" />
+                        <button onClick={() => setShowReportModal(true)} className="bg-brand-600 hover:bg-brand-700 text-white border border-brand-700 px-3 py-1 rounded text-xs font-bold shadow-sm flex items-center transition-colors">
+                            <i className="fa-solid fa-table-list mr-1.5"></i>詳細報表
+                        </button>
+                    </div>
+                </div>
+                <div className="flex-1 overflow-auto custom-scroll">
+                    <table className="w-full text-xs text-left">
+                        <thead className="text-slate-500 bg-slate-50 sticky top-0">
+                            <tr>
+                                <th className="px-4 py-2">人員</th>
+                                {weekDays.map(d => (
+                                    <th key={d.dateStr} className="px-2 py-2 text-center border-l border-slate-100">
+                                        <div>{d.label}</div>
+                                        <div className="text-[9px] font-normal">{d.dateStr.slice(5)}</div>
+                                    </th>
+                                ))}
+                                <th className="px-4 py-2 text-right">總計</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                            {Object.entries(weeklyStatsData).length === 0 ? (
+                                <tr><td colSpan={9} className="text-center py-8 text-slate-400">本週無工時紀錄</td></tr>
+                            ) : Object.entries(weeklyStatsData).map(([eng, days]) => (
+                                <tr key={eng}>
+                                    <td className="px-4 py-2 font-bold text-slate-700">{eng}</td>
+                                    {weekDays.map(d => (
+                                        <td key={d.dateStr} className="px-2 py-2 text-center border-l border-slate-100 font-mono">
+                                            {days[d.dateStr] ? <span className="font-bold text-brand-600">{days[d.dateStr]}</span> : <span className="text-slate-200">-</span>}
+                                        </td>
+                                    ))}
+                                    <td className="px-4 py-2 text-right font-bold text-slate-800">
+                                        {Object.values(days).reduce((a, b) => a + b, 0)}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {/* --- MODALS --- */}
+            {/* Task Edit Modal */}
+            {showEditModal && (
+                <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
+                    <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6">
+                        <h3 className="font-bold text-lg mb-4">{editingTask.id ? '編輯任務' : '新增任務'}</h3>
+                        <div className="space-y-3">
+                            <div><label className="text-xs font-bold text-slate-500 block mb-1">任務名稱</label><input value={editingTask.title || ''} onChange={e => setEditingTask({ ...editingTask, title: e.target.value })} className="w-full border rounded px-3 py-2 text-sm" placeholder="例如: 需求訪談" /></div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-xs font-bold text-slate-500 block mb-1">WBS 階段</label>
+                                    <select value={editingTask.category || ''} onChange={e => setEditingTask({ ...editingTask, category: e.target.value })} className="w-full border rounded px-3 py-2 text-sm">
+                                        {(localProject.wbs || []).map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold text-slate-500 block mb-1">負責人</label>
+                                    <select value={editingTask.assignee || ''} onChange={e => setEditingTask({ ...editingTask, assignee: e.target.value })} className="w-full border rounded px-3 py-2 text-sm">
+                                        <option value="">未指定</option>
+                                        {(localProject.engineers || []).map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div><label className="text-xs font-bold text-slate-500 block mb-1">開始日期</label><input type="date" value={editingTask.startDate || ''} onChange={e => setEditingTask({ ...editingTask, startDate: e.target.value })} className="w-full border rounded px-3 py-2 text-sm" /></div>
+                                <div><label className="text-xs font-bold text-slate-500 block mb-1">工期 (天)</label><input type="number" value={editingTask.duration || 1} onChange={e => setEditingTask({ ...editingTask, duration: Number(e.target.value) })} className="w-full border rounded px-3 py-2 text-sm" /></div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div><label className="text-xs font-bold text-slate-500 block mb-1">進度 %</label><input type="number" min="0" max="100" value={editingTask.progress || 0} onChange={e => setEditingTask({ ...editingTask, progress: Number(e.target.value) })} className="w-full border rounded px-3 py-2 text-sm" /></div>
+                                <div><label className="text-xs font-bold text-slate-500 block mb-1">延遲原因</label><input value={editingTask.delayReason || ''} onChange={e => setEditingTask({ ...editingTask, delayReason: e.target.value })} className="w-full border rounded px-3 py-2 text-sm" placeholder="若有延遲請說明..." /></div>
+                            </div>
+                        </div>
+                        <div className="mt-6 flex justify-between">
+                            {editingTask.id && <button onClick={deleteTask} className="text-red-500 font-bold text-xs hover:underline">刪除任務</button>}
+                            <div className="flex gap-2 ml-auto">
+                                <button onClick={() => setShowEditModal(false)} className="px-4 py-2 text-slate-500 font-bold text-xs hover:bg-slate-100 rounded">取消</button>
+                                <button onClick={saveTask} className="px-4 py-2 bg-brand-600 text-white font-bold text-xs rounded shadow">確認</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Team Modal */}
+            {showTeamModal && (
+                <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
+                    <div className="bg-white rounded-lg shadow-xl w-full max-w-sm p-6 max-h-[80vh] flex flex-col">
+                        <h3 className="font-bold text-lg mb-4">團隊成員管理</h3>
+                        <div className="flex-1 overflow-y-auto custom-scroll space-y-2 mb-4">
+                            {globalEngineers.map(eng => {
+                                const isMember = (localProject.engineers || []).some(e => e.name === eng.name);
+                                const isPM = localProject.manager === eng.name;
+                                return (
+                                    <div key={eng.name} className={`flex items-center justify-between p-2 rounded border ${isMember ? 'bg-brand-50 border-brand-200' : 'border-slate-100'}`}>
+                                        <label className="flex items-center gap-3 cursor-pointer flex-1">
+                                            <input type="checkbox" checked={isMember} onChange={() => toggleProjectEngineer(eng)} className="accent-brand-600 w-4 h-4" />
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: eng.color }}></div>
+                                                <span className={`text-sm ${isMember ? 'font-bold text-brand-800' : 'text-slate-500'}`}>{eng.name}</span>
+                                            </div>
+                                        </label>
+                                        {isMember && (
+                                            <button onClick={() => togglePM(eng.name)} className={`text-lg transition-colors ${isPM ? 'text-yellow-500' : 'text-slate-200 hover:text-yellow-300'}`} title={isPM ? "取消負責人" : "設為負責人"}>
+                                                <i className="fa-solid fa-crown"></i>
+                                            </button>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                        <button onClick={() => setShowTeamModal(false)} className="w-full bg-slate-800 text-white py-2 rounded text-xs font-bold">完成</button>
+                    </div>
+                </div>
+            )}
+
+            {/* WBS Modal */}
+            {showWBSModal && (
+                <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
+                    <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+                        <h3 className="font-bold text-lg mb-4">WBS 階段管理</h3>
+                        <div className="space-y-2 mb-4 max-h-[60vh] overflow-y-auto">
+                            {(localProject.wbs || []).map((w, i) => (
+                                <div key={w.id} className="flex gap-2">
+                                    <input value={w.name} onChange={e => {
+                                        const newName = e.target.value;
+                                        const oldName = localProject.wbs[i].name;
+                                        const newWbs = [...localProject.wbs];
+                                        newWbs[i].name = newName;
+
+                                        // Also update tasks associated with this WBS category to prevent orphan tasks
+                                        const newTasks = (localProject.tasks || []).map(t =>
+                                            t.category === oldName ? { ...t, category: newName } : t
+                                        );
+
+                                        setLocalProject({ ...localProject, wbs: newWbs, tasks: newTasks });
+                                    }} className="flex-1 border rounded px-2 py-1 text-sm" />
+                                    <button onClick={() => {
+                                        const newWbs = localProject.wbs.filter((_, idx) => idx !== i);
+                                        setLocalProject({ ...localProject, wbs: newWbs });
+                                    }} className="text-red-400 hover:text-red-600"><i className="fa-solid fa-trash"></i></button>
+                                </div>
+                            ))}
+                            <button onClick={() => setLocalProject({ ...localProject, wbs: [...localProject.wbs, { id: Date.now(), name: '新階段', collapsed: false }] })} className="w-full border border-dashed py-2 text-xs font-bold text-slate-400 hover:text-brand-600 hover:border-brand-300">+ 新增階段</button>
+                        </div>
+                        <button onClick={() => setShowWBSModal(false)} className="w-full bg-slate-800 text-white py-2 rounded text-xs font-bold">完成</button>
+                    </div>
+                </div>
+            )}
+
+            {/* Delay Reason Modal */}
+            {showDelayModal && (
+                <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4 backdrop-blur-sm">
+                    <div className="bg-white rounded-lg shadow-xl w-full max-w-sm p-6 border-l-4 border-amber-500">
+                        <h3 className="font-bold text-lg mb-2 text-slate-800"><i className="fa-solid fa-triangle-exclamation text-amber-500 mr-2"></i>任務延遲確認</h3>
+                        <p className="text-xs text-slate-500 mb-4">您將任務結束日期往後調整了，請說明延遲原因以利追蹤。</p>
+                        <textarea
+                            value={delayReasonInput}
+                            onChange={e => setDelayReasonInput(e.target.value)}
+                            className="w-full border border-slate-300 rounded p-2 text-sm mb-4 h-24 focus:ring-2 focus:ring-amber-500 outline-none"
+                            placeholder="請輸入原因 (必填)..."
+                        />
+                        <div className="flex gap-2">
+                            <button onClick={() => { setShowDelayModal(false); setPendingDelayTask(null); }} className="flex-1 py-2 bg-slate-100 text-slate-600 rounded text-xs font-bold">取消變更</button>
+                            <button onClick={confirmDelay} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded text-xs font-bold">確認延遲</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Labor Detailed Report Modal */}
+            {showReportModal && (
+                <LaborReportModal
+                    project={project}
+                    logs={logs}
+                    engineers={globalEngineers}
+                    onClose={() => setShowReportModal(false)}
                 />
-                <div className="flex gap-2">
-                    <button onClick={() => { setShowDelayModal(false); setPendingDelayTask(null); }} className="flex-1 py-2 bg-slate-100 text-slate-600 rounded text-xs font-bold">取消變更</button>
-                    <button onClick={confirmDelay} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded text-xs font-bold">確認延遲</button>
-                </div>
-            </div>
-        </div>
-    )
-}
+            )}
 
-{/* Labor Detailed Report Modal */ }
-{
-    showReportModal && (
-        <LaborReportModal
-            project={project}
-            logs={logs}
-            engineers={globalEngineers}
-            onClose={() => setShowReportModal(false)}
-        />
-    )
-}
-        </div >
+            {/* PDF Export Options Modal */}
+            {showPdfOptions && (
+                <div className="fixed inset-0 bg-black/50 z-[80] flex items-center justify-center p-4 backdrop-blur-sm">
+                    <div className="bg-white rounded-lg shadow-xl w-full max-w-sm p-6">
+                        <h3 className="font-bold text-lg mb-4 text-slate-800"><i className="fa-solid fa-file-pdf text-red-600 mr-2"></i>匯出 PDF 選項</h3>
+                        <div className="space-y-4 mb-6">
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 block mb-1">紙張大小</label>
+                                <div className="flex gap-2">
+                                    <button onClick={() => setPdfConfig({ ...pdfConfig, format: 'a4' })} className={`flex-1 py-2 text-xs font-bold rounded border ${pdfConfig.format === 'a4' ? 'bg-red-50 border-red-500 text-red-600' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>A4</button>
+                                    <button onClick={() => setPdfConfig({ ...pdfConfig, format: 'a3' })} className={`flex-1 py-2 text-xs font-bold rounded border ${pdfConfig.format === 'a3' ? 'bg-red-50 border-red-500 text-red-600' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>A3 (推薦)</button>
+                                </div>
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 block mb-1">方向</label>
+                                <div className="flex gap-2">
+                                    <button onClick={() => setPdfConfig({ ...pdfConfig, orientation: 'portrait' })} className={`flex-1 py-2 text-xs font-bold rounded border ${pdfConfig.orientation === 'portrait' ? 'bg-red-50 border-red-500 text-red-600' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>直向</button>
+                                    <button onClick={() => setPdfConfig({ ...pdfConfig, orientation: 'landscape' })} className={`flex-1 py-2 text-xs font-bold rounded border ${pdfConfig.orientation === 'landscape' ? 'bg-red-50 border-red-500 text-red-600' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>橫向</button>
+                                </div>
+                            </div>
+                            <label className="flex items-center gap-2 cursor-pointer p-2 border border-slate-100 rounded hover:bg-slate-50">
+                                <input type="checkbox" checked={pdfConfig.showDateRange} onChange={e => setPdfConfig({ ...pdfConfig, showDateRange: e.target.checked })} className="accent-red-600" />
+                                <span className="text-sm text-slate-700">在標題顯示專案期間</span>
+                            </label>
+                        </div>
+                        <div className="flex gap-2">
+                            <button onClick={() => setShowPdfOptions(false)} className="flex-1 py-2 bg-slate-100 text-slate-600 rounded text-xs font-bold hover:bg-slate-200">取消</button>
+                            <button onClick={exportPDF} className="flex-1 py-2 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-bold shadow">
+                                <i className="fa-solid fa-download mr-1"></i>開始匯出
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
     );
 };
-
-
