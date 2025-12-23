@@ -159,8 +159,19 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
     const renderDays = useMemo(() => {
         const validStart = localProject.startDate || toLocalISOString();
         const start = addDays(validStart, -START_OFFSET);
-        let duration = localProject.endDate ? getDaysDiff(validStart, localProject.endDate) + START_OFFSET + 30 : 60;
-        if (duration > 3650) duration = 365; // Cap at 1 year view to prevent crash
+
+        // Find the latest end date among all tasks
+        const maxTaskEnd = (localProject.tasks || []).reduce((max, t) => {
+            const taskEnd = addDays(t.startDate, t.duration);
+            return taskEnd > max ? taskEnd : max;
+        }, localProject.endDate || validStart);
+
+        // Use the later of Project End Date or Max Task End Date
+        const effectiveEndDate = (!localProject.endDate || maxTaskEnd > localProject.endDate) ? maxTaskEnd : localProject.endDate;
+
+        let duration = effectiveEndDate ? getDaysDiff(validStart, effectiveEndDate) + START_OFFSET + 30 : 60;
+
+        if (duration > 3650) duration = 3650; // Cap at ~10 years (increased from 1 year)
         if (duration < 1) duration = 30;
 
         const days = [];
@@ -178,7 +189,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
             });
         }
         return days;
-    }, [localProject.startDate, localProject.endDate, localProject.holidays]);
+    }, [localProject.startDate, localProject.endDate, localProject.holidays, localProject.tasks]);
 
     const headerTopRow = useMemo(() => {
         const items: { label: string, width: number }[] = [];
