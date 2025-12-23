@@ -341,6 +341,11 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
         return grouped;
     }, [logs, weekDays, project.id, project.name]);
 
+    const toggleAllWBS = (collapse: boolean) => {
+        const newWbs = (localProject.wbs || []).map(w => ({ ...w, collapsed: collapse }));
+        setLocalProject({ ...localProject, wbs: newWbs });
+    };
+
     const exportPDF = () => {
         // @ts-ignore
         if (typeof html2pdf === 'undefined') return alert("PDF 元件載入失敗");
@@ -348,6 +353,13 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
         if (el) {
             const clone = el.cloneNode(true) as HTMLElement;
             clone.classList.add('pdf-visible');
+
+            // Add Project Title for PDF
+            const titleDiv = document.createElement('div');
+            titleDiv.className = 'px-5 py-3 bg-white border-b border-slate-200 font-bold text-lg text-slate-800 flex items-center gap-4';
+            titleDiv.innerHTML = `<span>專案: ${localProject.name}</span> <span class="text-xs text-slate-500 font-mono bg-slate-100 px-2 py-1 rounded">ID: ${localProject.id}</span>`;
+            clone.insertBefore(titleDiv, clone.firstChild);
+
             document.body.appendChild(clone);
             // @ts-ignore
             html2pdf().set({ margin: 0.2, filename: `${localProject.name}.pdf`, image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2 }, jsPDF: { unit: 'in', format: 'a3', orientation: 'landscape' } }).from(clone).save().then(() => document.body.removeChild(clone));
@@ -442,7 +454,14 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                     <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
                         <div><label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">開始日期</label><input type="date" value={localProject.startDate} onChange={e => setLocalProject({ ...localProject, startDate: e.target.value })} className="w-full border rounded px-2 py-1 text-xs font-mono" /></div>
                         <div><label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">結束日期</label><input type="date" value={localProject.endDate || ''} onChange={e => setLocalProject({ ...localProject, endDate: e.target.value })} className="w-full border rounded px-2 py-1 text-xs font-mono" /></div>
-                        <div><label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">WBS 階段</label><button onClick={() => setShowWBSModal(true)} className="w-full border rounded px-2 py-1 text-xs font-bold bg-slate-50 hover:bg-white text-slate-600 text-left"><i className="fa-solid fa-list-check mr-2"></i>編輯階段</button></div>
+                        <div>
+                            <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">WBS 階段</label>
+                            <div className="flex gap-1">
+                                <button onClick={() => setShowWBSModal(true)} className="flex-1 border rounded px-2 py-1 text-xs font-bold bg-slate-50 hover:bg-white text-slate-600 text-left truncate"><i className="fa-solid fa-list-check mr-1.5"></i>編輯</button>
+                                <button onClick={() => toggleAllWBS(false)} className="w-8 border rounded flex items-center justify-center bg-white hover:bg-slate-50 text-slate-500" title="全部展開"><i className="fa-solid fa-angles-down"></i></button>
+                                <button onClick={() => toggleAllWBS(true)} className="w-8 border rounded flex items-center justify-center bg-white hover:bg-slate-50 text-slate-500" title="全部收合"><i className="fa-solid fa-angles-up"></i></button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -512,7 +531,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                             {/* Background Grid */}
                             <div className="absolute inset-0 flex pointer-events-none z-0" style={{ paddingLeft: sidebarWidth }}>
                                 {renderDays.map(d => (
-                                    <div key={`bg-${d.dateStr}`} className={`flex-shrink-0 border-r border-slate-100 h-full box-border ${d.isWeekend ? 'bg-orange-50' : ''} ${d.isHoliday ? '!bg-red-50' : ''}`} style={{ width: colWidth }}></div>
+                                    <div key={`bg-${d.dateStr}`} className={`flex-shrink-0 border-r border-slate-200 h-full box-border ${d.isWeekend ? 'bg-orange-50' : ''} ${d.isHoliday ? '!bg-red-50' : ''}`} style={{ width: colWidth }}></div>
                                 ))}
                             </div>
 
@@ -524,11 +543,11 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                             )}
 
                             {/* Task Rows */}
-                            <div className="relative pb-10">
+                            <div className="relative">
                                 {(localProject.wbs || []).map((cat, i) => (
                                     <div key={cat.id}>
                                         {/* Sticky WBS Header - Z-Index 60 only for left label, Timeline part is transparent/z-0 to show Red Line */}
-                                        <div className="flex h-9 border-y border-slate-200 group">
+                                        <div className="flex h-9 border-t-4 border-double border-slate-300 border-b border-slate-200 group">
                                             {/* Left Sticky Label */}
                                             <div className="sticky left-0 z-[60] bg-slate-50 flex items-center px-4 font-bold text-xs text-slate-700 sticky-left-col border-r border-slate-200 cursor-pointer hover:bg-slate-100"
                                                 style={{ width: sidebarWidth }}
@@ -559,8 +578,9 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                                                             <span className="text-xs font-medium text-slate-700 truncate">{task.title}</span>
                                                             {task.delayReason && <i className="fa-solid fa-circle-exclamation text-amber-500 text-[10px] ml-1" title={`延遲原因: ${task.delayReason}`}></i>}
                                                         </div>
-                                                        <div className="w-full h-1 bg-slate-100 rounded-full mt-1 overflow-hidden">
+                                                        <div className="w-full h-3 bg-slate-100 rounded-full mt-0.5 overflow-hidden relative border border-slate-200">
                                                             <div className="h-full bg-brand-500" style={{ width: `${task.progress}%` }}></div>
+                                                            <div className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-slate-600 leading-none drop-shadow-sm">{task.progress}%</div>
                                                         </div>
                                                     </div>
                                                 </div>
