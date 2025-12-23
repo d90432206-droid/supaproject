@@ -176,8 +176,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
         const effectiveEndDate = endCandidates[endCandidates.length - 1];
 
         // Calculate Duration
-        const extraBufferDays = 30 + (pdfConfig.extendMonths * 30);
-        let duration = getDaysDiff(validStart, effectiveEndDate) + START_OFFSET + extraBufferDays;
+        let duration = getDaysDiff(validStart, effectiveEndDate) + START_OFFSET + 30; // 30 days buffer
 
         // Safety Caps
         if (duration > 3650) duration = 3650; // Max 10 years
@@ -198,7 +197,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
             });
         }
         return days;
-    }, [localProject.startDate, localProject.endDate, localProject.holidays, localProject.tasks, pdfConfig.extendMonths]);
+    }, [localProject.startDate, localProject.endDate, localProject.holidays, localProject.tasks]);
 
     const headerTopRow = useMemo(() => {
         const items: { label: string, width: number }[] = [];
@@ -420,52 +419,13 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
             titleDiv.innerHTML = `<span>專案: ${localProject.name}</span> <span class="text-xs text-slate-500 font-mono bg-slate-100 px-2 py-1 rounded">ID: ${localProject.id}</span>${dateRangeHtml}`;
             clone.insertBefore(titleDiv, clone.firstChild);
 
-            // Fit to Page Logic
-            if (pdfConfig.fitToPage) {
-                const totalWidth = sidebarWidth + totalContentWidth;
-                // Approx usable width for A4/A3 Landscape in pixels (assuming 96DPI)
-                // A4 Landscape: ~1122px, A3 Landscape: ~1587px
-                // We leave some margin (approx 50px)
-                const targetWidth = pdfConfig.format === 'a3' ? 1500 : 1050;
+            // Unroll scrollable areas to ensure full content is visible (standard behavior)
+            const scrollables = clone.querySelectorAll('.overflow-x-auto, .overflow-auto');
+            scrollables.forEach((el) => {
+                (el as HTMLElement).style.overflow = 'visible';
+                (el as HTMLElement).style.width = 'auto';
+            });
 
-                // Allow scaling if width is different (Up or Down) - limit minor jitter > 10px
-                if (Math.abs(totalWidth - targetWidth) > 10) {
-                    const scale = targetWidth / totalWidth;
-                    clone.style.transform = `scale(${scale})`;
-                    clone.style.transformOrigin = 'top left';
-                    clone.style.width = `${totalWidth}px`; // Force original width for layout
-                    clone.style.marginBottom = `-${(1 - scale) * clone.scrollHeight}px`; // Adjust layout flow
-
-                    // Unroll scrollable areas to ensure full content is visible
-                    const scrollables = clone.querySelectorAll('.overflow-x-auto, .overflow-auto');
-                    scrollables.forEach((el) => {
-                        (el as HTMLElement).style.overflow = 'visible';
-                        (el as HTMLElement).style.width = 'auto'; // allow expansion
-                    });
-
-                    // We need to wrap it in a container that constraints the width for the PDF generator
-                    const wrapper = document.createElement('div');
-                    wrapper.style.width = `${targetWidth}px`;
-                    wrapper.style.overflow = 'hidden';
-                    wrapper.appendChild(clone);
-                    document.body.appendChild(wrapper);
-
-                    // @ts-ignore
-                    html2pdf().set({
-                        margin: 0.2,
-                        filename: `${localProject.name}.pdf`,
-                        image: { type: 'jpeg', quality: 0.98 },
-                        html2canvas: { scale: 2 }, // Keep high res capture
-                        jsPDF: { unit: 'in', format: pdfConfig.format, orientation: pdfConfig.orientation }
-                    }).from(wrapper).save().then(() => {
-                        document.body.removeChild(wrapper);
-                        setShowPdfOptions(false);
-                    });
-                    return;
-                }
-            }
-
-            document.body.appendChild(clone);
             // @ts-ignore
             html2pdf().set({
                 margin: 0.2,
@@ -474,11 +434,12 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                 html2canvas: { scale: 2 },
                 jsPDF: { unit: 'in', format: pdfConfig.format, orientation: pdfConfig.orientation }
             }).from(clone).save().then(() => {
-                document.body.removeChild(clone);
                 setShowPdfOptions(false);
             });
         }
     };
+
+
 
     const handleAddTask = () => {
         // 預設選中第一個分類，避免使用者未選擇時造成空值
@@ -582,7 +543,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                     <div className="flex items-center gap-2 md:gap-3 shrink-0">
                         <div className="flex bg-white p-1 rounded-lg border border-slate-200 shadow-sm">
                             {(['day', 'week', 'month'] as const).map(mode => (
-                                <button key={mode} onClick={() => { setViewMode(mode); setColWidth(mode === 'day' ? 40 : mode === 'week' ? 20 : 10); }} className={`px-2 py-1 rounded-md text-xs ${viewMode === mode ? 'bg-brand-50 text-brand-600 font-bold' : 'text-slate-500'}`}>{mode === 'day' ? '日視圖' : mode === 'week' ? '週視圖' : '月視圖'}</button>
+                                <button key={mode} onClick={() => { setViewMode(mode); setColWidth(mode === 'day' ? 40 : mode === 'week' ? 20 : 7); }} className={`px-2 py-1 rounded-md text-xs ${viewMode === mode ? 'bg-brand-50 text-brand-600 font-bold' : 'text-slate-500'}`}>{mode === 'day' ? '日視圖' : mode === 'week' ? '週視圖' : '月視圖'}</button>
                             ))}
                         </div>
                         {/* Zoom Buttons */}
@@ -638,8 +599,9 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                     </div>
 
                     {/* Content */}
+                    {/* Content */}
                     <div className="flex-1 overflow-auto custom-scroll relative" ref={ganttBodyRef} onScroll={e => timelineHeaderRef.current && (timelineHeaderRef.current.scrollLeft = (e.target as HTMLElement).scrollLeft)}>
-                        <div className="relative min-h-full" style={{ width: sidebarWidth + totalContentWidth }}>
+                        <div className="relative" style={{ width: sidebarWidth + totalContentWidth }}>
                             {/* Background Grid */}
                             <div className="absolute inset-0 flex pointer-events-none z-0" style={{ paddingLeft: sidebarWidth }}>
                                 {renderDays.map(d => (
@@ -952,24 +914,9 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                             </div>
                             <div className="flex flex-col gap-2">
                                 <label className="flex items-center gap-2 cursor-pointer p-2 border border-slate-100 rounded hover:bg-slate-50">
-                                    <input type="checkbox" checked={pdfConfig.fitToPage} onChange={e => setPdfConfig({ ...pdfConfig, fitToPage: e.target.checked })} className="accent-red-600" />
-                                    <span className="text-sm text-slate-700">自動縮放至單頁寬度 (Fit Width)</span>
-                                </label>
-                                <label className="flex items-center gap-2 cursor-pointer p-2 border border-slate-100 rounded hover:bg-slate-50">
                                     <input type="checkbox" checked={pdfConfig.showDateRange} onChange={e => setPdfConfig({ ...pdfConfig, showDateRange: e.target.checked })} className="accent-red-600" />
                                     <span className="text-sm text-slate-700">在標題顯示專案期間</span>
                                 </label>
-                                <div>
-                                    <label className="text-xs font-bold text-slate-500 block mb-1">尾段延伸空白 (月)</label>
-                                    <select value={pdfConfig.extendMonths} onChange={e => setPdfConfig({ ...pdfConfig, extendMonths: Number(e.target.value) })} className="w-full border rounded px-2 py-1 text-sm bg-white">
-                                        <option value={0}>不延伸</option>
-                                        <option value={1}>+ 1 個月</option>
-                                        <option value={2}>+ 2 個月</option>
-                                        <option value={3}>+ 3 個月</option>
-                                        <option value={6}>+ 6 個月</option>
-                                        <option value={12}>+ 1 年</option>
-                                    </select>
-                                </div>
                             </div>
                         </div>
                         <div className="flex gap-2">
