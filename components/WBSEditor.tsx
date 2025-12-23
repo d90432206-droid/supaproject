@@ -504,9 +504,12 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                     // The container is `relative`. Its height is determined by flow of rows.
                     // If rows are removed, height shrinks. Grid shrinks. Perfect.
 
+
                     // Ensure bodyClone overflow is visible
                     bodyClone.style.overflow = 'visible';
-                    bodyClone.parentElement!.style.overflow = 'visible'; // The .custom-scroll wrapper
+                    // NOT accessing parentElement here because bodyClone is not attached yet
+                    // bodyClone.parentElement!.style.overflow = 'visible'; 
+
 
                     // We need to wrap bodyClone in the scroll wrapper style to maintain layout?
                     // `.custom-scroll > div` is the `bodyContainer`.
