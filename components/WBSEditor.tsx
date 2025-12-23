@@ -175,7 +175,8 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
         const effectiveEndDate = endCandidates[endCandidates.length - 1];
 
         // Calculate Duration
-        let duration = getDaysDiff(validStart, effectiveEndDate) + START_OFFSET + 30; // 30 days buffer
+        const extraBufferDays = 30 + (pdfConfig.extendMonths * 30);
+        let duration = getDaysDiff(validStart, effectiveEndDate) + START_OFFSET + extraBufferDays;
 
         // Safety Caps
         if (duration > 3650) duration = 3650; // Max 10 years
@@ -196,7 +197,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
             });
         }
         return days;
-    }, [localProject.startDate, localProject.endDate, localProject.holidays, localProject.tasks]);
+    }, [localProject.startDate, localProject.endDate, localProject.holidays, localProject.tasks, pdfConfig.extendMonths]);
 
     const headerTopRow = useMemo(() => {
         const items: { label: string, width: number }[] = [];
@@ -426,7 +427,8 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                 // We leave some margin (approx 50px)
                 const targetWidth = pdfConfig.format === 'a3' ? 1500 : 1050;
 
-                if (totalWidth > targetWidth) {
+                // Allow scaling if width is different (Up or Down) - limit minor jitter > 10px
+                if (Math.abs(totalWidth - targetWidth) > 10) {
                     const scale = targetWidth / totalWidth;
                     clone.style.transform = `scale(${scale})`;
                     clone.style.transformOrigin = 'top left';
