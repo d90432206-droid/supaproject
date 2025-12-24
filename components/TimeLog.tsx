@@ -37,7 +37,11 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
 
     const projectTasks = useMemo(() => {
         if (!form.projectId) return [];
-        return projects.find(p => p.id === form.projectId)?.tasks || [];
+        const tasks = projects.find(p => p.id === form.projectId)?.tasks || [];
+        // Filter out empty titles and "1" (garbage data) and sort by ID/Category
+        return tasks
+            .filter(t => t.title && t.title.trim() !== '' && t.title !== '1')
+            .sort((a, b) => a.id - b.id);
     }, [form.projectId, projects]);
 
     const sortedLogs = useMemo(() => {
