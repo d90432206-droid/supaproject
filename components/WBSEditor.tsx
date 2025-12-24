@@ -1072,23 +1072,41 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                 <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
                     <div className="bg-white rounded-lg shadow-xl w-full max-w-sm p-6 max-h-[80vh] flex flex-col">
                         <h3 className="font-bold text-lg mb-4">團隊成員管理</h3>
+                        {!canEditTasks && ( // Reusing canEditTasks (isAdmin || isPM) as permission check
+                            <div className="mb-3 px-3 py-2 bg-amber-50 border border-amber-200 rounded text-amber-700 text-xs font-bold">
+                                <i className="fa-solid fa-lock mr-1.5"></i>
+                                僅專案負責人或管理員可修改成員
+                            </div>
+                        )}
                         <div className="flex-1 overflow-y-auto custom-scroll space-y-2 mb-4">
                             {globalEngineers.map(eng => {
                                 const isMember = (localProject.engineers || []).some(e => e.name === eng.name);
                                 const isPM = localProject.manager === eng.name;
                                 return (
-                                    <div key={eng.name} className={`flex items-center justify-between p-2 rounded border ${isMember ? 'bg-brand-50 border-brand-200' : 'border-slate-100'}`}>
-                                        <label className="flex items-center gap-3 cursor-pointer flex-1">
-                                            <input type="checkbox" checked={isMember} onChange={() => toggleProjectEngineer(eng)} className="accent-brand-600 w-4 h-4" />
+                                    <div key={eng.name} className={`flex items-center justify-between p-2 rounded border ${isMember ? 'bg-brand-50 border-brand-200' : 'border-slate-100'} ${!canEditTasks ? 'opacity-90' : ''}`}>
+                                        <label className={`flex items-center gap-3 flex-1 ${canEditTasks ? 'cursor-pointer' : 'cursor-not-allowed'}`}>
+                                            <input
+                                                type="checkbox"
+                                                checked={isMember}
+                                                onChange={() => toggleProjectEngineer(eng)}
+                                                disabled={!canEditTasks}
+                                                className={`accent-brand-600 w-4 h-4 ${!canEditTasks ? 'cursor-not-allowed opacity-50' : ''}`}
+                                            />
                                             <div className="flex items-center gap-2">
                                                 <div className="w-3 h-3 rounded-full" style={{ backgroundColor: eng.color }}></div>
                                                 <span className={`text-sm ${isMember ? 'font-bold text-brand-800' : 'text-slate-500'}`}>{eng.name}</span>
                                             </div>
                                         </label>
                                         {isMember && (
-                                            <button onClick={() => togglePM(eng.name)} className={`text-lg transition-colors ${isPM ? 'text-yellow-500' : 'text-slate-200 hover:text-yellow-300'}`} title={isPM ? "取消負責人" : "設為負責人"}>
-                                                <i className="fa-solid fa-crown"></i>
-                                            </button>
+                                            <>
+                                                {canEditTasks ? (
+                                                    <button onClick={() => togglePM(eng.name)} className={`text-lg transition-colors ${isPM ? 'text-yellow-500' : 'text-slate-200 hover:text-yellow-300'}`} title={isPM ? "取消負責人" : "設為負責人"}>
+                                                        <i className="fa-solid fa-crown"></i>
+                                                    </button>
+                                                ) : (
+                                                    isPM && <i className="fa-solid fa-crown text-yellow-500 text-lg" title="專案負責人"></i>
+                                                )}
+                                            </>
                                         )}
                                     </div>
                                 );
