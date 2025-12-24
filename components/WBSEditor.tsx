@@ -412,7 +412,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
             const el = document.getElementById('gantt-export-area');
             if (!el) return alert("找不到匯出區域");
 
-            alert("正在產生圖片，請稍候... (專案較大時可能需要幾秒鐘)");
+            alert("正在產生圖片，請稍候... \n\n若您的專案期間非常長 (超過1年)，建議先切換至「月視圖」再匯出，以獲得最佳效果。");
 
             const clone = el.cloneNode(true) as HTMLElement;
             // Force white background
@@ -431,15 +431,34 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
             titleDiv.innerHTML = `<span>專案: ${localProject.name}</span> <span class="text-xs text-slate-500 font-mono bg-slate-100 px-2 py-1 rounded">ID: ${localProject.id}</span>${dateRangeHtml}`;
             clone.insertBefore(titleDiv, clone.firstChild);
 
-            // Unroll scrollable areas
-            const scrollables = clone.querySelectorAll('.overflow-x-auto, .overflow-auto');
+            // Unroll scrollable areas & Fix Truncation
+            const scrollables = clone.querySelectorAll('.overflow-x-auto, .overflow-auto, .overflow-hidden');
             scrollables.forEach((el) => {
                 (el as HTMLElement).style.overflow = 'visible';
-                (el as HTMLElement).style.width = 'fit-content';
-                (el as HTMLElement).style.maxWidth = 'none';
+                // Only unset width for scroll containers, not everything
+                if (el.classList.contains('overflow-auto') || el.classList.contains('overflow-x-auto')) {
+                    (el as HTMLElement).style.width = 'fit-content';
+                    (el as HTMLElement).style.maxWidth = 'none';
+                }
             });
 
-            // Ensure container width fits content
+            // Remove text truncation to show full names
+            const truncated = clone.querySelectorAll('.truncate');
+            truncated.forEach(el => {
+                el.classList.remove('truncate');
+                (el as HTMLElement).style.whiteSpace = 'normal'; // Allow wrapping
+                (el as HTMLElement).style.overflow = 'visible';
+            });
+
+            // Allow task bars to show full text even if small
+            const taskTextContainers = clone.querySelectorAll('.text-\\[10px\\]');
+            taskTextContainers.forEach(el => {
+                (el as HTMLElement).style.overflow = 'visible';
+            });
+
+            // Ensure container width fits content + sidebar
+            // We need to calculate the full required width
+            // The unrolled content width should be enough.
             clone.style.width = 'fit-content';
             clone.style.minWidth = '1000px';
 
@@ -447,19 +466,17 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
             document.body.appendChild(clone);
 
             // Wait for layout to settle
-            await new Promise(resolve => setTimeout(resolve, 500));
+            await new Promise(resolve => setTimeout(resolve, 800));
 
             // Calculate dimensions
             const width = clone.scrollWidth;
             const height = clone.scrollHeight;
 
             // Smart Scale Logic
-            // Max canvas area ~268MP. 
-            // If width 20000 * height 1000 = 20MP (Safe)
-            // If width 20000 * height 5000 = 100MP (Safe)
-            // But texture limits might apply.
+            // If width is huge (e.g. Day View for 2 years ~30k px), we MUST scale down or browser canvas crash.
             let safeScale = 2;
-            if (width > 15000) safeScale = 1;
+            if (width > 10000) safeScale = 1.5;
+            if (width > 20000) safeScale = 1;
             if (width > 30000) safeScale = 0.8;
 
             console.log(`Exporting Image: Width=${width}, Height=${height}, Scale=${safeScale}`);
@@ -475,7 +492,15 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                 x: 0,
                 y: 0,
                 scrollX: 0,
-                scrollY: 0
+                scrollY: 0,
+                onclone: (doc) => {
+                    // Extra safety: ensure the cloned body is big enough
+                    const body = doc.getElementById('gantt-export-area');
+                    if (body) {
+                        body.style.width = `${width}px`;
+                        body.style.height = `${height}px`;
+                    }
+                }
             }).then(canvas => {
                 const link = document.createElement('a');
                 link.download = `${localProject.name}.png`;
@@ -486,7 +511,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                 setShowPdfOptions(false);
             }).catch(err => {
                 console.error("html2canvas Error:", err);
-                alert("圖片匯出失敗，請查看 Console 錯誤訊息");
+                alert("圖片匯出失敗 (可能圖檔過大)，請重試或縮短期間");
                 if (document.body.contains(clone)) document.body.removeChild(clone);
             });
 
