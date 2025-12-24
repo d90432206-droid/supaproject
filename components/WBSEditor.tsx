@@ -419,6 +419,18 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
             clone.style.backgroundColor = '#ffffff';
             clone.classList.add('pdf-visible');
 
+            // Sync Input Values (Date Pickers, etc.)
+            // Clone doesn't preserve current input values, so we copy them manually
+            const originalInputs = el.querySelectorAll('input, select, textarea');
+            const clonedInputs = clone.querySelectorAll('input, select, textarea');
+            originalInputs.forEach((input, i) => {
+                const val = (input as HTMLInputElement).value;
+                if (clonedInputs[i]) {
+                    (clonedInputs[i] as HTMLInputElement).value = val;
+                    (clonedInputs[i] as HTMLInputElement).setAttribute('value', val); // Force attribute for some renderers
+                }
+            });
+
             // Add Project Title for Image
             const titleDiv = document.createElement('div');
             titleDiv.className = 'px-5 py-3 bg-white border-b border-slate-200 font-bold text-lg text-slate-800 flex items-center gap-4';
@@ -442,7 +454,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                 }
             });
 
-            // Remove text truncation to show full names
+            // Remove text truncation and ensure Task List visibility
             const truncated = clone.querySelectorAll('.truncate');
             truncated.forEach(el => {
                 el.classList.remove('truncate');
@@ -450,10 +462,18 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                 (el as HTMLElement).style.overflow = 'visible';
             });
 
+            // Boost Z-Index for Left Sidebar (Task List)
+            const stickyCols = clone.querySelectorAll('.sticky-left-col');
+            stickyCols.forEach(el => {
+                (el as HTMLElement).style.zIndex = '999'; // Ensure it stays on top
+                (el as HTMLElement).style.backgroundColor = '#f8fafc'; // Ensure opacity
+            });
+
             // Allow task bars to show full text even if small
             const taskTextContainers = clone.querySelectorAll('.text-\\[10px\\]');
             taskTextContainers.forEach(el => {
                 (el as HTMLElement).style.overflow = 'visible';
+                (el as HTMLElement).style.zIndex = '50'; // Ensure text on bars is visible
             });
 
             // Ensure container width fits content + sidebar
