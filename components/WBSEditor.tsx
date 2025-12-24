@@ -109,7 +109,14 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
     // Permission Checks
     const isAdmin = loginData.role === 'Admin';
     const isPM = localProject.manager === loginData.user;
-    const canEditTasks = isAdmin || isPM;
+
+    // Permission: Can Manage (Full Access: Schedule, Title, Assignment, Delete)
+    const canManage = isAdmin || isPM;
+
+    // Permission: Can Update Progress (Member or higher)
+    // Note: loginData.name matches Engineer.name
+    const isTeamMember = (localProject.engineers || []).some(e => e.name === loginData.name);
+    const canUpdateProgress = canManage || isTeamMember;
 
     // Sync from prop (Fix unsaved warning sticking)
     useEffect(() => {
@@ -237,7 +244,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
 
     // Dragging Logic
     const handleMouseDown = (task: Task, e: React.MouseEvent) => {
-        if (!canEditTasks) return; // Permission Check
+        if (!canManage) return; // Permission Check: Only Managers can drag schedule
         if (e.button !== 0) return;
         e.preventDefault();
         setDraggingState({ isDragging: true, task, startX: e.clientX, startDate: task.startDate });
@@ -801,7 +808,11 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                         <div>
                             <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">WBS 階段</label>
                             <div className="flex gap-1">
-                                <button onClick={() => setShowWBSModal(true)} className="flex-1 border rounded px-2 py-1 text-xs font-bold bg-slate-50 hover:bg-white text-slate-600 text-left truncate"><i className="fa-solid fa-list-check mr-1.5"></i>編輯</button>
+                                {canManage ? (
+                                    <button onClick={() => setShowWBSModal(true)} className="flex-1 border rounded px-2 py-1 text-xs font-bold bg-slate-50 hover:bg-white text-slate-600 text-left truncate"><i className="fa-solid fa-list-check mr-1.5"></i>編輯</button>
+                                ) : (
+                                    <button className="flex-1 border rounded px-2 py-1 text-xs font-bold bg-slate-100 text-slate-400 cursor-not-allowed text-left truncate"><i className="fa-solid fa-lock mr-1.5"></i>唯讀</button>
+                                )}
                                 <button onClick={() => toggleAllWBS(false)} className="w-8 border rounded flex items-center justify-center bg-white hover:bg-slate-50 text-slate-500" title="全部展開"><i className="fa-solid fa-angles-down"></i></button>
                                 <button onClick={() => toggleAllWBS(true)} className="w-8 border rounded flex items-center justify-center bg-white hover:bg-slate-50 text-slate-500" title="全部收合"><i className="fa-solid fa-angles-up"></i></button>
                             </div>
@@ -822,7 +833,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                         <button onClick={() => { setColWidth(c => Math.min(200, c + 5)); setViewMode('custom'); }} className="p-1.5 text-slate-500 bg-white border rounded shadow-sm hover:bg-slate-50" title="放大 (Ctrl+滾輪)"><i className="fa-solid fa-magnifying-glass-plus text-xs"></i></button>
                         <button onClick={scrollToToday} className="px-3 py-1 bg-red-500 text-white text-xs font-bold rounded shadow-sm hover:bg-red-600 flex items-center"><i className="fa-solid fa-calendar-day mr-1"></i> TODAY</button>
                     </div>
-                    {canEditTasks && (
+                    {canManage && (
                         <button onClick={handleAddTask} className="bg-brand-600 text-white py-1.5 px-3 rounded-md text-xs font-bold shadow-sm flex-shrink-0"><i className="fa-solid fa-plus mr-1"></i>新增任務</button>
                     )}
                 </div>
@@ -1031,36 +1042,97 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                     <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6">
                         <h3 className="font-bold text-lg mb-4">{editingTask.id ? '編輯任務' : '新增任務'}</h3>
                         <div className="space-y-3">
-                            <div><label className="text-xs font-bold text-slate-500 block mb-1">任務名稱</label><input value={editingTask.title || ''} onChange={e => setEditingTask({ ...editingTask, title: e.target.value })} className="w-full border rounded px-3 py-2 text-sm" placeholder="例如: 需求訪談" /></div>
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 block mb-1">任務名稱</label>
+                                <input
+                                    value={editingTask.title || ''}
+                                    onChange={e => setEditingTask({ ...editingTask, title: e.target.value })}
+                                    className="w-full border rounded px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-500"
+                                    placeholder="例如: 需求訪談"
+                                    disabled={!canManage}
+                                />
+                            </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="text-xs font-bold text-slate-500 block mb-1">WBS 階段</label>
-                                    <select value={editingTask.category || ''} onChange={e => setEditingTask({ ...editingTask, category: e.target.value })} className="w-full border rounded px-3 py-2 text-sm">
+                                    <select
+                                        value={editingTask.category || ''}
+                                        onChange={e => setEditingTask({ ...editingTask, category: e.target.value })}
+                                        className="w-full border rounded px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-500"
+                                        disabled={!canManage}
+                                    >
                                         {(localProject.wbs || []).map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                                     </select>
                                 </div>
                                 <div>
                                     <label className="text-xs font-bold text-slate-500 block mb-1">負責人</label>
-                                    <select value={editingTask.assignee || ''} onChange={e => setEditingTask({ ...editingTask, assignee: e.target.value })} className="w-full border rounded px-3 py-2 text-sm">
+                                    <select
+                                        value={editingTask.assignee || ''}
+                                        onChange={e => setEditingTask({ ...editingTask, assignee: e.target.value })}
+                                        className="w-full border rounded px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-500"
+                                        disabled={!canManage}
+                                    >
                                         <option value="">未指定</option>
                                         {(localProject.engineers || []).map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
                                     </select>
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
-                                <div><label className="text-xs font-bold text-slate-500 block mb-1">開始日期</label><input type="date" value={editingTask.startDate || ''} onChange={e => setEditingTask({ ...editingTask, startDate: e.target.value })} className="w-full border rounded px-3 py-2 text-sm" /></div>
-                                <div><label className="text-xs font-bold text-slate-500 block mb-1">工期 (天)</label><input type="number" value={editingTask.duration || 1} onChange={e => setEditingTask({ ...editingTask, duration: Number(e.target.value) })} className="w-full border rounded px-3 py-2 text-sm" /></div>
+                                <div>
+                                    <label className="text-xs font-bold text-slate-500 block mb-1">開始日期</label>
+                                    <input
+                                        type="date"
+                                        value={editingTask.startDate || ''}
+                                        onChange={e => setEditingTask({ ...editingTask, startDate: e.target.value })}
+                                        className="w-full border rounded px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-500"
+                                        disabled={!canManage}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold text-slate-500 block mb-1">工期 (天)</label>
+                                    <input
+                                        type="number"
+                                        value={editingTask.duration || 1}
+                                        onChange={e => setEditingTask({ ...editingTask, duration: Number(e.target.value) })}
+                                        className="w-full border rounded px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-500"
+                                        disabled={!canManage}
+                                    />
+                                </div>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
-                                <div><label className="text-xs font-bold text-slate-500 block mb-1">進度 %</label><input type="number" min="0" max="100" value={editingTask.progress || 0} onChange={e => setEditingTask({ ...editingTask, progress: Number(e.target.value) })} className="w-full border rounded px-3 py-2 text-sm" /></div>
-                                <div><label className="text-xs font-bold text-slate-500 block mb-1">延遲原因</label><input value={editingTask.delayReason || ''} onChange={e => setEditingTask({ ...editingTask, delayReason: e.target.value })} className="w-full border rounded px-3 py-2 text-sm" placeholder="若有延遲請說明..." /></div>
+                                <div>
+                                    <label className="text-xs font-bold text-slate-500 block mb-1">進度 %</label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        max="100"
+                                        value={editingTask.progress || 0}
+                                        onChange={e => setEditingTask({ ...editingTask, progress: Number(e.target.value) })}
+                                        className="w-full border rounded px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-500"
+                                        disabled={!canUpdateProgress}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold text-slate-500 block mb-1">延遲原因</label>
+                                    <input
+                                        value={editingTask.delayReason || ''}
+                                        onChange={e => setEditingTask({ ...editingTask, delayReason: e.target.value })}
+                                        className="w-full border rounded px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-500"
+                                        placeholder="若有延遲請說明..."
+                                        disabled={!canUpdateProgress}
+                                    />
+                                </div>
                             </div>
                         </div>
                         <div className="mt-6 flex justify-between">
-                            {editingTask.id && <button onClick={deleteTask} className="text-red-500 font-bold text-xs hover:underline">刪除任務</button>}
+                            {editingTask.id && canManage && (
+                                <button onClick={deleteTask} className="text-red-500 font-bold text-xs hover:underline">刪除任務</button>
+                            )}
                             <div className="flex gap-2 ml-auto">
                                 <button onClick={() => setShowEditModal(false)} className="px-4 py-2 text-slate-500 font-bold text-xs hover:bg-slate-100 rounded">取消</button>
-                                <button onClick={saveTask} className="px-4 py-2 bg-brand-600 text-white font-bold text-xs rounded shadow">確認</button>
+                                {canUpdateProgress && (
+                                    <button onClick={saveTask} className="px-4 py-2 bg-brand-600 text-white font-bold text-xs rounded shadow">確認</button>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -1072,7 +1144,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                 <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
                     <div className="bg-white rounded-lg shadow-xl w-full max-w-sm p-6 max-h-[80vh] flex flex-col">
                         <h3 className="font-bold text-lg mb-4">團隊成員管理</h3>
-                        {!canEditTasks && ( // Reusing canEditTasks (isAdmin || isPM) as permission check
+                        {!canManage && ( // Reusing canManage (Admin || isPM) as permission check
                             <div className="mb-3 px-3 py-2 bg-amber-50 border border-amber-200 rounded text-amber-700 text-xs font-bold">
                                 <i className="fa-solid fa-lock mr-1.5"></i>
                                 僅專案負責人或管理員可修改成員
@@ -1083,14 +1155,14 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                                 const isMember = (localProject.engineers || []).some(e => e.name === eng.name);
                                 const isPM = localProject.manager === eng.name;
                                 return (
-                                    <div key={eng.name} className={`flex items-center justify-between p-2 rounded border ${isMember ? 'bg-brand-50 border-brand-200' : 'border-slate-100'} ${!canEditTasks ? 'opacity-90' : ''}`}>
-                                        <label className={`flex items-center gap-3 flex-1 ${canEditTasks ? 'cursor-pointer' : 'cursor-not-allowed'}`}>
+                                    <div key={eng.name} className={`flex items-center justify-between p-2 rounded border ${isMember ? 'bg-brand-50 border-brand-200' : 'border-slate-100'} ${!canManage ? 'opacity-90' : ''}`}>
+                                        <label className={`flex items-center gap-3 flex-1 ${canManage ? 'cursor-pointer' : 'cursor-not-allowed'}`}>
                                             <input
                                                 type="checkbox"
                                                 checked={isMember}
                                                 onChange={() => toggleProjectEngineer(eng)}
-                                                disabled={!canEditTasks}
-                                                className={`accent-brand-600 w-4 h-4 ${!canEditTasks ? 'cursor-not-allowed opacity-50' : ''}`}
+                                                disabled={!canManage}
+                                                className={`accent-brand-600 w-4 h-4 ${!canManage ? 'cursor-not-allowed opacity-50' : ''}`}
                                             />
                                             <div className="flex items-center gap-2">
                                                 <div className="w-3 h-3 rounded-full" style={{ backgroundColor: eng.color }}></div>
@@ -1099,7 +1171,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                                         </label>
                                         {isMember && (
                                             <>
-                                                {canEditTasks ? (
+                                                {canManage ? (
                                                     <button onClick={() => togglePM(eng.name)} className={`text-lg transition-colors ${isPM ? 'text-yellow-500' : 'text-slate-200 hover:text-yellow-300'}`} title={isPM ? "取消負責人" : "設為負責人"}>
                                                         <i className="fa-solid fa-crown"></i>
                                                     </button>
