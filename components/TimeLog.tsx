@@ -145,12 +145,18 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">專案 <span className="text-red-500">*</span></label>
-                                    <select value={form.projectId} onChange={e => setForm({ ...form, projectId: e.target.value })} className="w-full border rounded px-3 py-2 text-sm">
-                                        <option value="" disabled>選擇專案</option>
+                                    <input
+                                        list="project-list"
+                                        value={form.projectId}
+                                        onChange={e => setForm({ ...form, projectId: e.target.value })}
+                                        className="w-full border rounded px-3 py-2 text-sm"
+                                        placeholder="輸入或選擇專案編號"
+                                    />
+                                    <datalist id="project-list">
                                         {activeProjects.map(p => (
                                             <option key={p.id} value={p.id}>[{p.id}] {p.name}</option>
                                         ))}
-                                    </select>
+                                    </datalist>
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">工程師 <span className="text-red-500">*</span></label>
@@ -169,10 +175,25 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">任務</label>
-                                    <select value={form.taskId} onChange={e => setForm({ ...form, taskId: e.target.value })} className="w-full border rounded px-3 py-2 text-sm">
-                                        <option value="">-- 選擇任務 (選填) --</option>
-                                        {projectTasks.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
-                                    </select>
+                                    <input
+                                        list="task-list"
+                                        value={(() => {
+                                            // Ensure we display the title in the input
+                                            const matched = projectTasks.find(t => t.id == form.taskId);
+                                            return matched ? matched.title : form.taskId;
+                                        })()}
+                                        onChange={e => {
+                                            const val = e.target.value;
+                                            // Try to map back to ID
+                                            const matched = projectTasks.find(t => t.title === val);
+                                            setForm({ ...form, taskId: matched ? matched.id : val });
+                                        }}
+                                        className="w-full border rounded px-3 py-2 text-sm"
+                                        placeholder="輸入或選擇任務"
+                                    />
+                                    <datalist id="task-list">
+                                        {projectTasks.map(t => <option key={t.id} value={t.title} />)}
+                                    </datalist>
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">工時</label>
@@ -226,6 +247,19 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
                                                     {getProjectDisplay(log.projectId)}
                                                 </td>
                                                 <td className="px-6 py-3">
+                                                    {log.taskId && (
+                                                        <div className="text-brand-600 font-bold mb-1">
+                                                            {(() => {
+                                                                // Resolve task name
+                                                                const proj = projects.find(p => p.id === log.projectId);
+                                                                if (proj) {
+                                                                    const t = proj.tasks.find(x => x.id == log.taskId);
+                                                                    if (t) return t.title;
+                                                                }
+                                                                return log.taskId; // Show custom string or ID if not found
+                                                            })()}
+                                                        </div>
+                                                    )}
                                                     <div className="text-slate-500 text-xs break-words">{log.note}</div>
                                                 </td>
                                                 <td className="px-6 py-3 text-right font-mono font-bold">{log.hours}</td>
