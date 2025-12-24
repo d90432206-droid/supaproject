@@ -801,7 +801,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                                                     </div>
                                                 </div>
                                                 {/* Task Bar */}
-                                                <div className="relative h-full w-full">
+                                                <div className="relative h-full flex-1">
                                                     <div
                                                         className={`absolute h-5 top-2 rounded-sm shadow-sm flex items-center px-2 text-[10px] text-white font-bold whitespace-nowrap overflow-hidden border border-white/20 select-none
                                                         ${draggingState.task?.id === task.id ? 'opacity-80 scale-[1.01] shadow-xl ring-2 ring-white z-50 cursor-grabbing' : 'cursor-grab hover:brightness-110 z-10'}
