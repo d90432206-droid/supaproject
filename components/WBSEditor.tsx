@@ -419,16 +419,15 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
             clone.style.backgroundColor = '#ffffff';
             clone.classList.add('pdf-visible');
 
-            // Sync Input Values (Date Pickers, etc.)
-            // Clone doesn't preserve current input values, so we copy them manually
-            const originalInputs = el.querySelectorAll('input, select, textarea');
+            // Perfect Input Value Sync Strategy: Replace Inputs with Spans
+            // html2canvas often fails to render date inputs content. Text replacement is bulletproof.
             const clonedInputs = clone.querySelectorAll('input, select, textarea');
-            originalInputs.forEach((input, i) => {
+            clonedInputs.forEach((input) => {
                 const val = (input as HTMLInputElement).value;
-                if (clonedInputs[i]) {
-                    (clonedInputs[i] as HTMLInputElement).value = val;
-                    (clonedInputs[i] as HTMLInputElement).setAttribute('value', val); // Force attribute for some renderers
-                }
+                const span = document.createElement('span');
+                span.innerText = val || '-'; // Show placeholder if empty
+                span.className = 'font-mono text-slate-700 font-bold'; // Mimic style
+                input.parentNode?.replaceChild(span, input);
             });
 
             // Add Project Title for Image
@@ -467,6 +466,14 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
             stickyCols.forEach(el => {
                 (el as HTMLElement).style.zIndex = '999'; // Ensure it stays on top
                 (el as HTMLElement).style.backgroundColor = '#f8fafc'; // Ensure opacity
+            });
+
+            // Fix Sidebar Spacing (Increase gap between text and progress bar)
+            // We target the progress bar container which usually has 'mt-0.5'
+            const progressBars = clone.querySelectorAll('.mt-0\\.5');
+            progressBars.forEach(el => {
+                el.classList.remove('mt-0.5');
+                (el as HTMLElement).style.marginTop = '6px'; // Add visual gap
             });
 
             // Allow task bars to show full text even if small
