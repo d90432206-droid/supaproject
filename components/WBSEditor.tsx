@@ -404,6 +404,65 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
         setLocalProject({ ...localProject, wbs: newWbs });
     };
 
+    const exportImage = () => {
+        // @ts-ignore
+        if (typeof html2pdf === 'undefined') return alert("匯出元件尚未載入，請檢查網路連線或重新整理頁面。");
+
+        try {
+            const el = document.getElementById('gantt-export-area');
+            if (!el) return alert("找不到匯出區域");
+
+            const clone = el.cloneNode(true) as HTMLElement;
+            clone.classList.add('pdf-visible'); // Reuse same style for visibility
+
+            // Add Project Title for Image
+            const titleDiv = document.createElement('div');
+            titleDiv.className = 'px-5 py-3 bg-white border-b border-slate-200 font-bold text-lg text-slate-800 flex items-center gap-4';
+
+            let dateRangeHtml = '';
+            if (localProject.startDate) {
+                dateRangeHtml = `<span class="text-sm text-slate-500 ml-auto font-normal">期間: ${localProject.startDate} ~ ${localProject.endDate || '未定'}</span>`;
+            }
+
+            titleDiv.innerHTML = `<span>專案: ${localProject.name}</span> <span class="text-xs text-slate-500 font-mono bg-slate-100 px-2 py-1 rounded">ID: ${localProject.id}</span>${dateRangeHtml}`;
+            clone.insertBefore(titleDiv, clone.firstChild);
+
+            // Unroll scrollable areas
+            const scrollables = clone.querySelectorAll('.overflow-x-auto, .overflow-auto');
+            scrollables.forEach((el) => {
+                (el as HTMLElement).style.overflow = 'visible';
+                (el as HTMLElement).style.width = 'fit-content';
+                (el as HTMLElement).style.maxWidth = 'none';
+            });
+
+            // Ensure container width fits content
+            clone.style.width = 'fit-content';
+            clone.style.minWidth = '1000px';
+
+            document.body.appendChild(clone);
+
+            // @ts-ignore
+            html2pdf().set({
+                margin: 0.2,
+                filename: `${localProject.name}.png`,
+                image: { type: 'png', quality: 1.0 },
+                html2canvas: { scale: 2, useCORS: true }, // Scale 2 for good resolution (High DPI)
+                jsPDF: { unit: 'in', format: 'a4', orientation: 'landscape' } // Not used for img, but required by set
+            }).from(clone).toImg().save().then(() => {
+                document.body.removeChild(clone);
+                setShowPdfOptions(false);
+            }).catch((err: any) => {
+                console.error("Image Export Error:", err);
+                alert("圖片匯出失敗");
+                if (document.body.contains(clone)) document.body.removeChild(clone);
+            });
+
+        } catch (e) {
+            console.error("Export Error:", e);
+            alert(`匯出設定錯誤: ${e.message}`);
+        }
+    };
+
     const exportPDF = () => {
         // @ts-ignore
         if (typeof html2pdf === 'undefined') return alert("PDF 元件尚未載入，請檢查網路連線或重新整理頁面。");
@@ -635,7 +694,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                 </div>
                 <div className="flex gap-1 md:gap-2 shrink-0">
                     <button onClick={() => setShowTeamModal(true)} className="px-2 md:px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-md text-xs font-bold hover:bg-slate-50"><i className="fa-solid fa-users-gear md:mr-1.5"></i><span className="hidden md:inline">團隊成員</span></button>
-                    <button onClick={() => setShowPdfOptions(true)} className="px-2 md:px-3 py-1.5 bg-white border border-red-100 text-red-600 rounded-md text-xs font-bold hover:bg-red-50"><i className="fa-solid fa-file-pdf md:mr-1.5"></i>PDF</button>
+                    <button onClick={() => setShowPdfOptions(true)} className="px-2 md:px-3 py-1.5 bg-white border border-red-100 text-red-600 rounded-md text-xs font-bold hover:bg-red-50"><i className="fa-solid fa-file-export md:mr-1.5"></i>匯出</button>
                     <button onClick={() => onUpdate(localProject)} className="px-3 md:px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md font-bold text-xs shadow-md"><i className="fa-solid fa-save md:mr-1.5"></i>儲存 WBS</button>
                 </div>
             </header>
@@ -1016,8 +1075,18 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
             {showPdfOptions && (
                 <div className="fixed inset-0 bg-black/50 z-[80] flex items-center justify-center p-4 backdrop-blur-sm">
                     <div className="bg-white rounded-lg shadow-xl w-full max-w-sm p-6">
-                        <h3 className="font-bold text-lg mb-4 text-slate-800"><i className="fa-solid fa-file-pdf text-red-600 mr-2"></i>匯出 PDF 選項</h3>
-                        <div className="space-y-4 mb-6">
+                        <h3 className="font-bold text-lg mb-4 text-slate-800"><i className="fa-solid fa-file-export text-slate-600 mr-2"></i>匯出選項</h3>
+
+                        <div className="mb-6 p-3 bg-blue-50 border border-blue-100 rounded-lg">
+                            <h4 className="font-bold text-xs text-blue-700 mb-2">推薦方式：匯出圖片 (PNG)</h4>
+                            <p className="text-[10px] text-blue-600 mb-3">若您的專案期間較長 (超過6個月)，建議匯出為圖片，可完整保留所有時程細節且不被截斷。</p>
+                            <button onClick={exportImage} className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm font-bold shadow flex items-center justify-center">
+                                <i className="fa-solid fa-image mr-2"></i>下載高解析度 PNG 圖片
+                            </button>
+                        </div>
+
+                        <div className="border-t border-slate-100 pt-4 space-y-4 mb-6 relative">
+                            <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-white px-2 text-xs text-slate-400">或匯出 PDF</div>
                             <div>
                                 <label className="text-xs font-bold text-slate-500 block mb-1">紙張大小</label>
                                 <div className="flex gap-2">
@@ -1042,7 +1111,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                         <div className="flex gap-2">
                             <button onClick={() => setShowPdfOptions(false)} className="flex-1 py-2 bg-slate-100 text-slate-600 rounded text-xs font-bold hover:bg-slate-200">取消</button>
                             <button onClick={exportPDF} className="flex-1 py-2 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-bold shadow">
-                                <i className="fa-solid fa-download mr-1"></i>開始匯出
+                                <i className="fa-solid fa-file-pdf mr-1"></i>匯出 PDF
                             </button>
                         </div>
                     </div>
