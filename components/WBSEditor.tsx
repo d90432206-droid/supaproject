@@ -413,7 +413,9 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
             if (!el) return alert("找不到匯出區域");
 
             const clone = el.cloneNode(true) as HTMLElement;
-            clone.classList.add('pdf-visible'); // Reuse same style for visibility
+            // Force white background on the cloned element to prevent transparency (black image)
+            clone.style.backgroundColor = '#ffffff';
+            clone.classList.add('pdf-visible');
 
             // Add Project Title for Image
             const titleDiv = document.createElement('div');
@@ -441,19 +443,33 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
 
             document.body.appendChild(clone);
 
+            // Calculate dimensions to warn user if too large
+            const width = clone.scrollWidth;
+            const height = clone.scrollHeight;
+
+            // Adjust scale based on width to prevent canvas crash (Max canvas area ~268MP, width ~32k)
+            // If width > 15000, safe scale is 1. If < 15000, scale 2.
+            const safeScale = width > 15000 ? 1 : 1.5;
+
             // @ts-ignore
             html2pdf().set({
                 margin: 0.2,
                 filename: `${localProject.name}.png`,
                 image: { type: 'png', quality: 1.0 },
-                html2canvas: { scale: 2, useCORS: true }, // Scale 2 for good resolution (High DPI)
-                jsPDF: { unit: 'in', format: 'a4', orientation: 'landscape' } // Not used for img, but required by set
+                html2canvas: {
+                    scale: safeScale,
+                    useCORS: true,
+                    backgroundColor: '#ffffff', // Explicitly set canvas background
+                    windowWidth: width,
+                    windowHeight: height
+                },
+                jsPDF: { unit: 'in', format: 'a4', orientation: 'landscape' }
             }).from(clone).toImg().save().then(() => {
-                document.body.removeChild(clone);
+                if (document.body.contains(clone)) document.body.removeChild(clone);
                 setShowPdfOptions(false);
             }).catch((err: any) => {
                 console.error("Image Export Error:", err);
-                alert("圖片匯出失敗");
+                alert("圖片匯出失敗 (可能圖檔過大)，請重試或縮短期間");
                 if (document.body.contains(clone)) document.body.removeChild(clone);
             });
 
