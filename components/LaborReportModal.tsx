@@ -70,10 +70,13 @@ export const LaborReportModal: React.FC<LaborReportModalProps> = ({ project, log
     }, [logs, project, selectedProjectId, startDate, endDate, selectedEng]);
 
     const handleExport = () => {
-        const headers = ['日期', '專案', '姓名', '任務', '備註內容', '工時'];
-        const csvContent = [
-            headers.join(','),
-            ...filteredLogs.map(l => {
+        try {
+            if (filteredLogs.length === 0) {
+                return alert("目前篩選條件下無任何資料可匯出。");
+            }
+
+            const headers = ['日期', '專案', '姓名', '任務', '備註內容', '工時'];
+            const rows = filteredLogs.map(l => {
                 const taskName = resolveTaskName(l);
                 const noteContent = l.note || l.content || '';
                 return [
@@ -84,17 +87,23 @@ export const LaborReportModal: React.FC<LaborReportModalProps> = ({ project, log
                     `"${String(noteContent).replace(/"/g, '""')}"`,
                     l.hours
                 ].join(',');
-            })
-        ].join('\n');
+            });
 
-        const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', `${targetProjectName}_工時報表_${new Date().toISOString().slice(0, 10)}.csv`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+            // Join with newline directly to avoid call stack size exceeded with spread operator
+            const csvContent = headers.join(',') + '\n' + rows.join('\n');
+
+            const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `${targetProjectName}_工時報表_${new Date().toISOString().slice(0, 10)}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        } catch (e: any) {
+            console.error("Export Error:", e);
+            alert(`匯出失敗: ${e.message}`);
+        }
     };
 
     return (
@@ -132,7 +141,7 @@ export const LaborReportModal: React.FC<LaborReportModalProps> = ({ project, log
                         <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full border rounded px-2 py-1.5 text-sm" />
                     </div>
                     <div className="flex items-end">
-                        <button onClick={handleExport} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-1.5 rounded text-sm shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled={filteredLogs.length === 0}>
+                        <button onClick={handleExport} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-1.5 rounded text-sm shadow-sm transition-colors">
                             <i className="fa-solid fa-file-csv mr-2"></i>匯出 CSV
                         </button>
                     </div>
