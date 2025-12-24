@@ -404,16 +404,18 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
         setLocalProject({ ...localProject, wbs: newWbs });
     };
 
-    const exportImage = () => {
+    const exportImage = async () => {
         // @ts-ignore
-        if (typeof html2pdf === 'undefined') return alert("匯出元件尚未載入，請檢查網路連線或重新整理頁面。");
+        if (typeof html2canvas === 'undefined') return alert("圖片匯出元件尚未載入，請檢查網路連線或重新整理頁面。");
 
         try {
             const el = document.getElementById('gantt-export-area');
             if (!el) return alert("找不到匯出區域");
 
+            alert("正在產生圖片，請稍候... (專案較大時可能需要幾秒鐘)");
+
             const clone = el.cloneNode(true) as HTMLElement;
-            // Force white background on the cloned element to prevent transparency (black image)
+            // Force white background
             clone.style.backgroundColor = '#ffffff';
             clone.classList.add('pdf-visible');
 
@@ -441,35 +443,50 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
             clone.style.width = 'fit-content';
             clone.style.minWidth = '1000px';
 
+            // Append to body to render width
             document.body.appendChild(clone);
 
-            // Calculate dimensions to warn user if too large
+            // Wait for layout to settle
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            // Calculate dimensions
             const width = clone.scrollWidth;
             const height = clone.scrollHeight;
 
-            // Adjust scale based on width to prevent canvas crash (Max canvas area ~268MP, width ~32k)
-            // If width > 15000, safe scale is 1. If < 15000, scale 2.
-            const safeScale = width > 15000 ? 1 : 1.5;
+            // Smart Scale Logic
+            // Max canvas area ~268MP. 
+            // If width 20000 * height 1000 = 20MP (Safe)
+            // If width 20000 * height 5000 = 100MP (Safe)
+            // But texture limits might apply.
+            let safeScale = 2;
+            if (width > 15000) safeScale = 1;
+            if (width > 30000) safeScale = 0.8;
+
+            console.log(`Exporting Image: Width=${width}, Height=${height}, Scale=${safeScale}`);
 
             // @ts-ignore
-            html2pdf().set({
-                margin: 0.2,
-                filename: `${localProject.name}.png`,
-                image: { type: 'png', quality: 1.0 },
-                html2canvas: {
-                    scale: safeScale,
-                    useCORS: true,
-                    backgroundColor: '#ffffff', // Explicitly set canvas background
-                    windowWidth: width,
-                    windowHeight: height
-                },
-                jsPDF: { unit: 'in', format: 'a4', orientation: 'landscape' }
-            }).from(clone).toImg().save().then(() => {
+            html2canvas(clone, {
+                scale: safeScale,
+                useCORS: true,
+                backgroundColor: '#ffffff',
+                logging: false,
+                windowWidth: width,
+                windowHeight: height,
+                x: 0,
+                y: 0,
+                scrollX: 0,
+                scrollY: 0
+            }).then(canvas => {
+                const link = document.createElement('a');
+                link.download = `${localProject.name}.png`;
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+
                 if (document.body.contains(clone)) document.body.removeChild(clone);
                 setShowPdfOptions(false);
-            }).catch((err: any) => {
-                console.error("Image Export Error:", err);
-                alert("圖片匯出失敗 (可能圖檔過大)，請重試或縮短期間");
+            }).catch(err => {
+                console.error("html2canvas Error:", err);
+                alert("圖片匯出失敗，請查看 Console 錯誤訊息");
                 if (document.body.contains(clone)) document.body.removeChild(clone);
             });
 
