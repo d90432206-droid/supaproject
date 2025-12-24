@@ -26,6 +26,22 @@ export const LaborReportModal: React.FC<LaborReportModalProps> = ({ project, log
         return pid;
     };
 
+    const resolveTaskName = (l: Log) => {
+        // 1. Try to find project
+        let proj = project;
+        if (!proj && projects) {
+            proj = projects.find(p => p.id === l.projectId);
+        }
+
+        if (proj && l.taskId) {
+            // 2. Try to find task in project
+            const t = proj.tasks.find(t => t.id == l.taskId);
+            if (t) return t.title;
+        }
+        // 3. Fallback to taskId (custom input) or empty
+        return l.taskId || '';
+    };
+
     const filteredLogs = useMemo(() => {
         return logs.filter(l => {
             const logDate = String(l.date).replace(/\//g, '-');
@@ -54,16 +70,21 @@ export const LaborReportModal: React.FC<LaborReportModalProps> = ({ project, log
     }, [logs, project, selectedProjectId, startDate, endDate, selectedEng]);
 
     const handleExport = () => {
-        const headers = ['日期', '專案', '姓名', '任務/備註', '工時'];
+        const headers = ['日期', '專案', '姓名', '任務', '備註內容', '工時'];
         const csvContent = [
             headers.join(','),
-            ...filteredLogs.map(l => [
-                l.date,
-                `"[${l.projectId}] ${getProjectName(l.projectId).replace(/"/g, '""')}"`,
-                l.engineer,
-                `"${(l.taskTitle || l.content || '').replace(/"/g, '""')}"`,
-                l.hours
-            ].join(','))
+            ...filteredLogs.map(l => {
+                const taskName = resolveTaskName(l);
+                const noteContent = l.note || l.content || '';
+                return [
+                    l.date,
+                    `"[${l.projectId}] ${getProjectName(l.projectId).replace(/"/g, '""')}"`,
+                    l.engineer,
+                    `"${String(taskName).replace(/"/g, '""')}"`,
+                    `"${String(noteContent).replace(/"/g, '""')}"`,
+                    l.hours
+                ].join(',');
+            })
         ].join('\n');
 
         const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
