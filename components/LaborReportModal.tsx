@@ -50,7 +50,7 @@ export const LaborReportModal: React.FC<LaborReportModalProps> = ({ project, log
             if (selectedEng && l.engineer !== selectedEng) return false;
 
             return true;
-        }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        }).sort((a, b) => a.date.localeCompare(b.date));
     }, [logs, project, selectedProjectId, startDate, endDate, selectedEng]);
 
     const handleExport = () => {
@@ -132,17 +132,17 @@ export const LaborReportModal: React.FC<LaborReportModalProps> = ({ project, log
                         <tbody className="divide-y divide-slate-100">
                             {filteredLogs.length === 0 ? (
                                 <tr><td colSpan={5} className="text-center py-8 text-slate-400">無符合條件的資料</td></tr>
-                            ) : filteredLogs.map(l => (
-                                <tr key={l.logId} className="hover:bg-slate-50">
+                            ) : filteredLogs.map((l, idx) => (
+                                <tr key={`${l.logId}-${idx}`} className="hover:bg-slate-50">
                                     <td className="px-4 py-2 font-mono text-slate-600 whitespace-nowrap">{l.date}</td>
                                     <td className="px-4 py-2 text-slate-600 whitespace-nowrap max-w-[150px] truncate" title={getProjectName(l.projectId)}>
                                         {getProjectName(l.projectId)}
                                     </td>
                                     <td className="px-4 py-2 font-bold text-slate-700 whitespace-nowrap">{l.engineer}</td>
                                     <td className="px-4 py-2 text-slate-800">
-                                        <div className="max-w-[300px] truncate" title={l.taskTitle || l.content}>
+                                        <div className="max-w-[300px] truncate" title={l.taskTitle || l.content || l.note}>
                                             {l.taskTitle && <span className="bg-brand-50 text-brand-700 px-1.5 py-0.5 rounded text-xs mr-2">{l.taskTitle}</span>}
-                                            {l.content || <span className="text-slate-300 italic">無備註</span>}
+                                            {l.content || l.note || <span className="text-slate-300 italic">無備註</span>}
                                         </div>
                                     </td>
                                     <td className="px-4 py-2 text-right font-mono font-bold text-brand-600">{l.hours}</td>
