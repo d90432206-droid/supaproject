@@ -476,6 +476,13 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                 (el as HTMLElement).style.marginTop = '6px'; // Add visual gap
             });
 
+            // Center Text in Timeline Task Bars (The colored bars)
+            const timelineBars = clone.querySelectorAll('.absolute.h-5.top-2.text-white');
+            timelineBars.forEach(el => {
+                (el as HTMLElement).style.justifyContent = 'center';
+                (el as HTMLElement).style.textAlign = 'center';
+            });
+
             // Allow task bars to show full text even if small
             const taskTextContainers = clone.querySelectorAll('.text-\\[10px\\]');
             taskTextContainers.forEach(el => {
