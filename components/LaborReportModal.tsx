@@ -79,9 +79,11 @@ export const LaborReportModal: React.FC<LaborReportModalProps> = ({ project, log
             const rows = filteredLogs.map(l => {
                 const taskName = resolveTaskName(l);
                 const noteContent = l.note || l.content || '';
+                const projName = getProjectName(l.projectId) || l.projectId || '';
+
                 return [
                     l.date,
-                    `"[${l.projectId}] ${getProjectName(l.projectId).replace(/"/g, '""')}"`,
+                    `"[${l.projectId}] ${String(projName).replace(/"/g, '""')}"`,
                     l.engineer,
                     `"${String(taskName).replace(/"/g, '""')}"`,
                     `"${String(noteContent).replace(/"/g, '""')}"`,
