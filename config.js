@@ -5,10 +5,11 @@
 export const CONFIG = {
   SUPABASE: {
     // Supabase URL (從您的截圖與之前的檔案取得)
-    URL: 'https://fbpdjnreljhfgmdflfjl.supabase.co',
+    URL: 'https://wcgdapjjzpzvjprzudyq.supabase.co',
     
     // Supabase Anon Key
-    KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZicGRqbnJlbGpoZmdtZGZsZmpsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ3NjY1OTUsImV4cCI6MjA4MDM0MjU5NX0.Ocy7vUZ3tURpPC2t7PQ4062r_zxtVSNehiYN2nT6blQ',
+    KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndjZ2RhcGpqenB6dmpwcnp1ZHlxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc5NTc4ODEsImV4cCI6MjA4MzUzMzg4MX0._Nn91KgZjMCZfvr6189RY-GIy_l-PwZSAIrQ06SYJNY',
+
     
     // 資料表名稱設定 (全面改為小寫以符合 PostgreSQL 標準)
     TABLES: {

@@ -295,8 +295,9 @@ function App() {
             <div className="mb-6">
               <label className="block text-xs font-bold text-slate-500 uppercase mb-2">身份選擇</label>
               <div className="flex bg-slate-100 p-1 rounded-lg">
-                <button onClick={() => { setLoginData({ ...loginData, role: 'Engineer' }); setLoginInputPass(''); }} className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${loginData.role === 'Engineer' ? 'bg-white text-brand-600 shadow-sm' : 'text-slate-400'}`}>工程師</button>
-                <button onClick={() => { setLoginData({ ...loginData, role: 'Admin' }); setLoginInputPass(''); }} className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${loginData.role === 'Admin' ? 'bg-white text-brand-600 shadow-sm' : 'text-slate-400'}`}>管理員</button>
+                <button onClick={() => { setLoginData({ ...loginData, role: 'Engineer' }); setLoginInputPass(''); }} className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${loginData.role === 'Engineer' ? 'bg-white text-brand-600 shadow-sm' : 'text-slate-400'}`}>prj_工程師</button>
+                <button onClick={() => { setLoginData({ ...loginData, role: 'Admin' }); setLoginInputPass(''); }} className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${loginData.role === 'Admin' ? 'bg-white text-brand-600 shadow-sm' : 'text-slate-400'}`}>prj_管理員</button>
+
               </div>
             </div>
 

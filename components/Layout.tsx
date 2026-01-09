@@ -81,19 +81,19 @@ export const Layout: React.FC<LayoutProps> = ({
         <nav className="flex-1 py-6 space-y-1 overflow-y-auto">
           <NavItem 
             icon="fa-chart-pie" 
-            label="營運儀表板" 
+            label="prj_營運儀表板" 
             isActive={currentView === 'dashboard'} 
             onClick={() => handleNavClick('dashboard')} 
           />
           <NavItem 
             icon="fa-folder-tree" 
-            label="專案與 WBS" 
+            label="prj_專案與 WBS" 
             isActive={currentView === 'projects' || currentView === 'wbs-editor'} 
             onClick={() => handleNavClick('projects')} 
           />
           <NavItem 
             icon="fa-stopwatch" 
-            label="工時日報表" 
+            label="prj_工時日報表" 
             isActive={currentView === 'timelog'} 
             onClick={() => handleNavClick('timelog')} 
           />

@@ -825,8 +825,9 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                     <div className="flex items-center gap-2 md:gap-3 shrink-0">
                         <div className="flex bg-white p-1 rounded-lg border border-slate-200 shadow-sm">
                             {(['day', 'week', 'month'] as const).map(mode => (
-                                <button key={mode} onClick={() => { setViewMode(mode); setColWidth(mode === 'day' ? 40 : mode === 'week' ? 20 : 7); }} className={`px-2 py-1 rounded-md text-xs ${viewMode === mode ? 'bg-brand-50 text-brand-600 font-bold' : 'text-slate-500'}`}>{mode === 'day' ? '日視圖' : mode === 'week' ? '週視圖' : '月視圖'}</button>
+                                <button key={mode} onClick={() => { setViewMode(mode); setColWidth(mode === 'day' ? 40 : mode === 'week' ? 20 : 7); }} className={`px-2 py-1 rounded-md text-xs ${viewMode === mode ? 'bg-brand-50 text-brand-600 font-bold' : 'text-slate-500'}`}>{mode === 'day' ? 'prj_日視圖' : mode === 'week' ? 'prj_週視圖' : 'prj_月視圖'}</button>
                             ))}
+
                         </div>
                         {/* Zoom Buttons */}
                         <button onClick={() => { setColWidth(c => Math.max(10, c - 5)); setViewMode('custom'); }} className="p-1.5 text-slate-500 bg-white border rounded shadow-sm hover:bg-slate-50" title="縮小 (Ctrl+滾輪)"><i className="fa-solid fa-magnifying-glass-minus text-xs"></i></button>
