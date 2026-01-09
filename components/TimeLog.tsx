@@ -128,8 +128,9 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 shrink-0 gap-4 md:gap-0">
                 <h2 className="text-2xl font-bold text-slate-800">工時日報表</h2>
                 <div className="flex flex-wrap bg-white p-1 rounded-lg border border-slate-200 shadow-sm w-full md:w-auto">
-                    <button onClick={() => setView('input')} className={`flex-1 md:flex-none px-4 py-1.5 rounded text-sm font-bold transition-all ${view === 'input' ? 'bg-slate-800 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}>prj_日報輸入</button>
-                    <button onClick={() => setView('weekly')} className={`flex-1 md:flex-none px-4 py-1.5 rounded text-sm font-bold transition-all ${view === 'weekly' ? 'bg-slate-800 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}>prj_週工時統計</button>
+                    <button onClick={() => setView('input')} className={`flex-1 md:flex-none px-4 py-1.5 rounded text-sm font-bold transition-all ${view === 'input' ? 'bg-slate-800 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}>日報輸入</button>
+                    <button onClick={() => setView('weekly')} className={`flex-1 md:flex-none px-4 py-1.5 rounded text-sm font-bold transition-all ${view === 'weekly' ? 'bg-slate-800 text-white shadow' : 'text-slate-500 hover:bg-slate-50'}`}>週工時統計</button>
+
 
                 </div>
             </div>
