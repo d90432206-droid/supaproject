@@ -21,8 +21,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ projects, logs, messages, 
   const [barChartFilter, setBarChartFilter] = useState<'Active' | 'Closed' | 'All'>('Active');
   const [newMessage, setNewMessage] = useState('');
 
-  const activeProjects = projects.filter(p => p.status === 'Active');
-  const closedProjects = projects.filter(p => p.status === 'Closed');
+  // 定義要排除在儀表板統計之外的專案 ID
+  const EXCLUDED_IDS = ['INTERNAL', 'MAINT', 'OFFICE'];
+
+  const activeProjects = projects.filter(p => p.status === 'Active' && !EXCLUDED_IDS.includes(p.id));
+  const closedProjects = projects.filter(p => p.status === 'Closed' && !EXCLUDED_IDS.includes(p.id));
 
   // KPI Calculations
   // Fix: Only count budget for Active projects
@@ -39,10 +42,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ projects, logs, messages, 
   const totalActual = Math.round(rawTotalActual * 10) / 10;
 
   const alertProjects = useMemo(() => {
-    return projects.map(p => {
-      const actual = logs.filter(l => l.projectId === p.id).reduce((s, l) => s + l.hours, 0);
-      return { ...p, actualHours: Math.round(actual * 10) / 10, usage: p.budgetHours > 0 ? (actual / p.budgetHours) : 0 };
-    }).filter(p => p.budgetHours > 0 && p.actualHours > (p.budgetHours * 0.8));
+    // 預警專案也排除虛擬專案
+    return projects
+      .filter(p => !EXCLUDED_IDS.includes(p.id))
+      .map(p => {
+        const actual = logs.filter(l => l.projectId === p.id).reduce((s, l) => s + l.hours, 0);
+        return { ...p, actualHours: Math.round(actual * 10) / 10, usage: p.budgetHours > 0 ? (actual / p.budgetHours) : 0 };
+      })
+      .filter(p => p.budgetHours > 0 && p.actualHours > (p.budgetHours * 0.8));
   }, [projects, logs]);
 
   const availableYears = useMemo(() => {
@@ -50,13 +57,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ projects, logs, messages, 
     return Array.from(years).sort().reverse();
   }, [logs]);
 
-  // 修改：BarData 根據 barChartFilter 進行篩選
+  // 修改：BarData 根據 barChartFilter 進行篩選，並排除虛擬專案
   const barData = useMemo(() => {
-    let targetProjects = projects;
+    let targetProjects = projects.filter(p => !EXCLUDED_IDS.includes(p.id));
     if (barChartFilter === 'Active') {
-      targetProjects = projects.filter(p => p.status === 'Active');
+      targetProjects = targetProjects.filter(p => p.status === 'Active');
     } else if (barChartFilter === 'Closed') {
-      targetProjects = projects.filter(p => p.status === 'Closed');
+      targetProjects = targetProjects.filter(p => p.status === 'Closed');
     }
 
     return targetProjects.map(p => ({
@@ -68,7 +75,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ projects, logs, messages, 
   }, [projects, logs, barChartFilter]);
 
   const pieData = useMemo(() => {
-    let filteredLogs = logs.filter(l => l.date.startsWith(yearFilter));
+    // 圓餅圖統計也可以排除這些虛擬專案的工時，或是保留？
+    // 根據使用者需求「不想讓這幾個項目在儀表板統計」，通常包含工時分佈
+    let filteredLogs = logs
+      .filter(l => l.date.startsWith(yearFilter))
+      .filter(l => !EXCLUDED_IDS.includes(l.projectId));
 
     if (projectFilter) {
       filteredLogs = filteredLogs.filter(l => l.projectId === projectFilter);
@@ -83,6 +94,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ projects, logs, messages, 
 
   // --- Schedule Overview Logic ---
   const scheduleTimeline = useMemo(() => {
+    // 這裡使用的是已經過濾過的 activeProjects
     if (activeProjects.length === 0) return { months: [], startMonthDate: new Date() };
 
     // Find min start and max end date
@@ -316,7 +328,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ projects, logs, messages, 
                 className="flex-[2] text-xs border border-slate-200 rounded px-2 py-1 bg-slate-50 outline-none focus:border-brand-500"
               >
                 <option value="">全公司總覽</option>
-                {projects.map(p => (
+                {projects.filter(p => !EXCLUDED_IDS.includes(p.id)).map(p => (
                   <option key={p.id} value={p.id}>{p.name} ({p.id})</option>
                 ))}
               </select>
