@@ -1,5 +1,5 @@
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Project, Log, SystemMessage, LoginData } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 
@@ -20,6 +20,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ projects, logs, messages, 
   // 新增：長條圖的篩選狀態 (預設顯示執行中)
   const [barChartFilter, setBarChartFilter] = useState<'Active' | 'Closed' | 'All'>('Active');
   const [newMessage, setNewMessage] = useState('');
+
+  // RWD Check
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // 定義要排除在儀表板統計之外的專案 ID
   const EXCLUDED_IDS = ['INTERNAL', 'MAINT', 'OFFICE'];
@@ -179,16 +188,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ projects, logs, messages, 
         <div className="overflow-x-auto custom-scroll">
           <div className="min-w-[1000px] flex">
             {/* Left: Project Info Table - Raised z-index to 40 to cover red line (z-20) */}
-            <div className="w-[300px] flex-shrink-0 border-r border-slate-200 bg-white z-40 sticky left-0 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.1)]">
+            <div className="w-[150px] md:w-[300px] flex-shrink-0 border-r border-slate-200 bg-white z-40 sticky left-0 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.1)]">
               <div className="h-10 bg-slate-100 border-b border-slate-200 flex items-center px-4 font-bold text-xs text-slate-600">
-                <div className="w-20">案號</div>
-                <div className="w-20">客戶</div>
+                <div className="w-20 hidden md:block">案號</div>
+                <div className="w-20 hidden md:block">客戶</div>
                 <div className="flex-1">設備名稱</div>
               </div>
               {activeProjects.map((p, idx) => (
                 <div key={p.id} className={`h-12 flex items-center px-4 text-xs border-b border-slate-100 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`}>
-                  <div className="w-20 font-mono font-bold text-slate-700 truncate pr-2" title={p.id}>{p.id}</div>
-                  <div className="w-20 text-slate-600 truncate pr-2" title={p.client}>{p.client}</div>
+                  <div className="w-20 font-mono font-bold text-slate-700 truncate pr-2 hidden md:block" title={p.id}>{p.id}</div>
+                  <div className="w-20 text-slate-600 truncate pr-2 hidden md:block" title={p.client}>{p.client}</div>
                   <div className="flex-1 font-medium text-slate-800 truncate" title={p.name}>{p.name}</div>
                 </div>
               ))}
@@ -352,7 +361,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ projects, logs, messages, 
                   ))}
                 </Pie>
                 <Tooltip />
-                <Legend layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{ fontSize: '11px' }} />
+                <Legend 
+                  layout={isMobile ? 'horizontal' : 'vertical'} 
+                  verticalAlign={isMobile ? 'bottom' : 'middle'} 
+                  align={isMobile ? 'center' : 'right'} 
+                  wrapperStyle={{ fontSize: '11px' }} 
+                />
               </PieChart>
             </ResponsiveContainer>
           </div>
