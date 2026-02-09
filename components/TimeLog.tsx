@@ -31,9 +31,7 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
 
     const activeProjects = projects.filter(p => p.status === 'Active');
 
-    useEffect(() => {
-        setForm(prev => ({ ...prev, taskId: '' }));
-    }, [form.projectId]);
+
 
     const projectTasks = useMemo(() => {
         if (!form.projectId) return [];
@@ -150,7 +148,7 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
                                     <input
                                         list="project-list"
                                         value={form.projectId}
-                                        onChange={e => setForm({ ...form, projectId: e.target.value })}
+                                        onChange={e => setForm({ ...form, projectId: e.target.value, taskId: '' })}
                                         className="w-full border rounded px-3 py-2 text-sm"
                                         placeholder="輸入或選擇專案編號"
                                     />
