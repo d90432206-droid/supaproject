@@ -134,8 +134,8 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
             </div>
 
             {view === 'input' ? (
-                <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 md:gap-8">
-                    <div className="xl:col-span-1">
+                <div className="grid grid-cols-1 2xl:grid-cols-3 gap-4 md:gap-8">
+                    <div className="2xl:col-span-1">
                         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 sticky top-6">
                             <h3 className="font-bold text-slate-700 mb-4 border-b pb-2">{form.logId ? '編輯紀錄' : '新增紀錄'}</h3>
                             <div className="space-y-4">
@@ -209,7 +209,7 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
                             </div>
                         </div>
                     </div>
-                    <div className="xl:col-span-2">
+                    <div className="2xl:col-span-2">
                         <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
                             {/* Filters */}
                             <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap gap-4 items-center">
