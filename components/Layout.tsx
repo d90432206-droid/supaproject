@@ -17,11 +17,14 @@ export const Layout: React.FC<LayoutProps> = ({
   children, loginData, currentView, setView, onLogout, onOpenAdminPanel, isOnline, isLoading 
 }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
 
   const handleNavClick = (view: ViewState) => {
     setView(view);
     setIsSidebarOpen(false); // Close sidebar on mobile after selection
   };
+
+  const showSidebar = isSidebarOpen || isHovered;
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50">
@@ -46,12 +49,25 @@ export const Layout: React.FC<LayoutProps> = ({
         ></div>
       )}
 
+      {/* Desktop Hover Trigger Zone */}
+      <div 
+        className="hidden md:block fixed inset-y-0 left-0 w-4 z-40 hover:bg-slate-400/20 transition-colors cursor-pointer group"
+        onMouseEnter={() => setIsHovered(true)}
+      >
+        <div className="absolute top-1/2 left-0.5 -translate-y-1/2 text-slate-400/50 group-hover:text-slate-600">
+            <i className="fa-solid fa-caret-right"></i>
+        </div>
+      </div>
+
       {/* Sidebar */}
-      <aside className={`
-        fixed md:static inset-y-0 left-0 z-50 w-64 bg-slate-900 text-slate-300 flex flex-col shrink-0 transition-transform duration-300 transform 
-        ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} 
-        md:translate-x-0 shadow-xl md:shadow-none
-      `}>
+      <aside 
+        className={`
+          fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-slate-300 flex flex-col shrink-0 transition-transform duration-300 transform shadow-xl
+          ${showSidebar ? 'translate-x-0' : '-translate-x-full'} 
+        `}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
         <div className="h-20 flex items-center px-6 border-b border-slate-800">
           <img 
             src="/logo.png" 
