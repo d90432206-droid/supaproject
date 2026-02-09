@@ -122,7 +122,7 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
     }, [logs, weekDays, weeklyProjectFilter]);
 
     return (
-        <div className="flex-1 overflow-y-auto p-4 md:p-8 animate-in fade-in flex flex-col">
+        <div className="flex-1 overflow-y-auto p-2 md:p-4 animate-in fade-in flex flex-col">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 shrink-0 gap-4 md:gap-0">
                 <h2 className="text-2xl font-bold text-slate-800">工時日報表</h2>
                 <div className="flex flex-wrap bg-white p-1 rounded-lg border border-slate-200 shadow-sm w-full md:w-auto">
@@ -134,8 +134,8 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
             </div>
 
             {view === 'input' ? (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    <div className="lg:col-span-1">
+                <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 md:gap-8">
+                    <div className="xl:col-span-1">
                         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 sticky top-6">
                             <h3 className="font-bold text-slate-700 mb-4 border-b pb-2">{form.logId ? '編輯紀錄' : '新增紀錄'}</h3>
                             <div className="space-y-4">
@@ -209,7 +209,7 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
                             </div>
                         </div>
                     </div>
-                    <div className="lg:col-span-2">
+                    <div className="xl:col-span-2">
                         <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
                             {/* Filters */}
                             <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap gap-4 items-center">
@@ -228,12 +228,12 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
                                 <table className="w-full text-sm text-left">
                                     <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b">
                                         <tr>
-                                            <th className="px-6 py-3 whitespace-nowrap">日期</th>
-                                            <th className="px-6 py-3 whitespace-nowrap">人員</th>
-                                            <th className="px-6 py-3 whitespace-nowrap">專案</th>
-                                            <th className="px-6 py-3 min-w-[150px]">任務/備註</th>
-                                            <th className="px-6 py-3 text-right whitespace-nowrap">時數</th>
-                                            <th className="px-6 py-3 text-right whitespace-nowrap">操作</th>
+                                            <th className="px-3 md:px-6 py-3 whitespace-nowrap">日期</th>
+                                            <th className="px-3 md:px-6 py-3 whitespace-nowrap">人員</th>
+                                            <th className="px-3 md:px-6 py-3 whitespace-nowrap">專案</th>
+                                            <th className="px-3 md:px-6 py-3 min-w-[150px]">任務/備註</th>
+                                            <th className="px-3 md:px-6 py-3 text-right whitespace-nowrap">時數</th>
+                                            <th className="px-3 md:px-6 py-3 text-right whitespace-nowrap">操作</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100">
@@ -241,12 +241,12 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
                                             <tr><td colSpan={6} className="text-center py-8 text-slate-400">無符合條件的紀錄</td></tr>
                                         ) : sortedLogs.map((log, idx) => (
                                             <tr key={log.logId || idx} className="hover:bg-slate-50">
-                                                <td className="px-6 py-3 text-slate-500 whitespace-nowrap">{log.date}</td>
-                                                <td className="px-6 py-3 font-bold text-slate-700 whitespace-nowrap">{log.engineer}</td>
-                                                <td className="px-6 py-3 text-brand-600 font-medium whitespace-nowrap">
+                                                <td className="px-3 md:px-6 py-3 text-slate-500 whitespace-nowrap">{log.date}</td>
+                                                <td className="px-3 md:px-6 py-3 font-bold text-slate-700 whitespace-nowrap">{log.engineer}</td>
+                                                <td className="px-3 md:px-6 py-3 text-brand-600 font-medium whitespace-nowrap">
                                                     {getProjectDisplay(log.projectId)}
                                                 </td>
-                                                <td className="px-6 py-3">
+                                                <td className="px-3 md:px-6 py-3">
                                                     {log.taskId && (
                                                         <div className="text-brand-600 font-bold mb-1">
                                                             {(() => {
@@ -262,8 +262,8 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
                                                     )}
                                                     <div className="text-slate-500 text-xs break-words">{log.note}</div>
                                                 </td>
-                                                <td className="px-6 py-3 text-right font-mono font-bold">{log.hours}</td>
-                                                <td className="px-6 py-3 text-right">
+                                                <td className="px-3 md:px-6 py-3 text-right font-mono font-bold">{log.hours}</td>
+                                                <td className="px-3 md:px-6 py-3 text-right">
                                                     {(loginData.role === 'Admin' || log.engineer === loginData.user) && (
                                                         <button onClick={() => handleEdit(log)} className="text-slate-400 hover:text-brand-600">
                                                             <i className="fa-solid fa-pen"></i>
