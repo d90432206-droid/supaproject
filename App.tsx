@@ -177,6 +177,22 @@ function App() {
       setIsLoading(false);
     }
   };
+  const handleLogDelete = async (logId: number) => {
+    if (!confirm("確定要刪除這筆紀錄嗎？")) return;
+    
+    // UI Update
+    setLogs(prev => prev.filter(l => l.logId !== logId));
+    
+    setIsLoading(true);
+    try {
+      await SupabaseService.deleteLog(logId);
+    } catch (e: any) {
+      alert('刪除失敗: ' + (e.message || JSON.stringify(e)));
+      loadAllData(); // Revert on error
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Engineer Management Handlers
   const handleSaveEngineer = async () => {
@@ -374,6 +390,7 @@ function App() {
             loginData={loginData}
             engineers={globalEngineers}
             onSubmitLog={handleLogSubmit}
+            onDeleteLog={handleLogDelete}
           />
         )}
       </Layout>

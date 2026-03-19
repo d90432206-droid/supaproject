@@ -301,5 +301,20 @@ export const SupabaseService = {
       console.error("Delete Message Error:", e);
       throw e;
     }
+  },
+
+  // 6. 刪除單一日報
+  deleteLog: async (logId: number): Promise<void> => {
+    try {
+      const { error } = await supabase
+        .from(CONFIG.SUPABASE.TABLES.LOGS)
+        .delete()
+        .eq('logid', String(logId));
+        
+      if (error) throw new Error(`Delete Log Error: ${error.message}`);
+    } catch (e) {
+      console.error("Delete Log Error:", e);
+      throw e;
+    }
   }
 };

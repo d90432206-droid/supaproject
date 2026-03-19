@@ -9,9 +9,10 @@ interface TimeLogProps {
     loginData: LoginData;
     engineers: GlobalEngineer[];
     onSubmitLog: (log: Partial<Log>) => void;
+    onDeleteLog: (logId: number) => void;
 }
 
-export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, engineers, onSubmitLog }) => {
+export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, engineers, onSubmitLog, onDeleteLog }) => {
     const [view, setView] = useState<'input' | 'weekly'>('input');
     const [form, setForm] = useState<Partial<Log>>({
         date: new Date().toISOString().split('T')[0],
@@ -83,6 +84,22 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
         });
     };
 
+    const handleDelete = (logId: number) => {
+        onDeleteLog(logId);
+        // If we are currently editing the deleted log, reset the form
+        if (form.logId === logId) {
+            setForm({
+                date: new Date().toISOString().split('T')[0],
+                hours: 1,
+                engineer: loginData.role === 'Engineer' ? loginData.user : '',
+                projectId: '',
+                taskId: '',
+                note: '',
+                logId: undefined
+            });
+        }
+    };
+
     const getProjectDisplay = (pid: string) => {
         const p = projects.find(x => x.id === pid);
         return p ? `[${p.id}] ${p.name}` : pid;
@@ -122,7 +139,7 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
     }, [logs, weekDays, weeklyProjectFilter]);
 
     return (
-        <div className="flex-1 overflow-y-auto p-2 md:p-4 animate-in fade-in flex flex-col">
+        <div className="flex-1 overflow-y-auto lg:overflow-hidden p-2 md:p-4 animate-in fade-in flex flex-col min-h-0">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 shrink-0 gap-4 md:gap-0">
                 <h2 className="text-2xl font-bold text-slate-800">工時日報表</h2>
                 <div className="flex flex-wrap bg-white p-1 rounded-lg border border-slate-200 shadow-sm w-full md:w-auto">
@@ -134,9 +151,9 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
             </div>
 
             {view === 'input' ? (
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                    <div className="lg:col-span-4 xl:col-span-3">
-                        <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-100 sticky top-6">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-0 overflow-hidden lg:h-full">
+                    <div className="lg:col-span-4 xl:col-span-3 flex flex-col min-h-0 lg:h-full">
+                        <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-100 overflow-y-auto flex-1 min-h-0">
                             <h3 className="font-bold text-slate-700 mb-4 border-b pb-2">{form.logId ? '編輯紀錄' : '新增紀錄'}</h3>
                             <div className="space-y-3">
                                 <div>
@@ -209,8 +226,8 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
                             </div>
                         </div>
                     </div>
-                    <div className="lg:col-span-8 xl:col-span-9">
-                        <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden h-full flex flex-col">
+                    <div className="lg:col-span-8 xl:col-span-9 flex flex-col min-h-0 lg:h-full">
+                        <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden flex-1 flex flex-col min-h-0">
                             {/* Filters */}
                             <div className="p-3 bg-slate-50 border-b border-slate-200 flex flex-wrap gap-3 items-center shrink-0">
                                 <div className="flex items-center gap-2">
@@ -224,7 +241,7 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
                                 </div>
                             </div>
 
-                            <div className="flex-1 overflow-auto">
+                            <div className="flex-1 overflow-y-auto min-h-0">
                                 <table className="w-full text-left border-collapse">
                                     <thead className="text-[11px] text-slate-500 uppercase bg-slate-50 border-b sticky top-0 z-10 shadow-sm">
                                         <tr>
@@ -240,7 +257,11 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
                                         {sortedLogs.length === 0 ? (
                                             <tr><td colSpan={6} className="text-center py-8 text-slate-400">無符合條件的紀錄</td></tr>
                                         ) : sortedLogs.map((log, idx) => (
-                                            <tr key={log.logId || idx} className="hover:bg-slate-50 transition-colors">
+                                            <tr 
+                                                key={log.logId || idx} 
+                                                onClick={() => handleEdit(log)}
+                                                className={`group cursor-pointer transition-colors ${form.logId === log.logId ? 'bg-brand-50 border-l-2 border-brand-500' : 'hover:bg-slate-50'}`}
+                                            >
                                                 <td className="px-3 py-2 text-slate-500 whitespace-nowrap font-mono">{log.date.slice(5)}</td>
                                                 <td className="px-3 py-2 font-bold text-slate-700 whitespace-nowrap">{log.engineer}</td>
                                                 <td className="px-3 py-2 text-brand-600 font-medium whitespace-nowrap max-w-[120px] truncate" title={getProjectDisplay(log.projectId)}>
@@ -252,7 +273,7 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
                                                          return p ? p.name : '';
                                                     })()}
                                                 </td>
-                                                <td className="px-3 py-2 relative group">
+                                                <td className="px-3 py-2 relative">
                                                     {log.taskId && (
                                                         <div className="text-brand-600 font-bold mb-0.5 truncate">
                                                             {(() => {
@@ -270,11 +291,18 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
                                                 </td>
                                                 <td className="px-3 py-2 text-right font-mono font-bold text-[13px]">{log.hours}</td>
                                                 <td className="px-2 py-2 text-right">
-                                                    {(loginData.role === 'Admin' || log.engineer === loginData.user) && (
-                                                        <button onClick={() => handleEdit(log)} className="p-1 px-2 text-slate-400 hover:text-brand-600 transition-colors">
-                                                            <i className="fa-solid fa-pen"></i>
-                                                        </button>
-                                                    )}
+                                                    <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        {(loginData.role === 'Admin' || log.engineer === loginData.user) && (
+                                                            <>
+                                                                <button onClick={(e) => { e.stopPropagation(); handleEdit(log); }} className="p-1 px-2 text-slate-400 hover:text-brand-600 transition-colors">
+                                                                    <i className="fa-solid fa-pen"></i>
+                                                                </button>
+                                                                <button onClick={(e) => { e.stopPropagation(); handleDelete(log.logId); }} className="p-1 px-2 text-slate-400 hover:text-red-600 transition-colors">
+                                                                    <i className="fa-solid fa-trash-can"></i>
+                                                                </button>
+                                                            </>
+                                                        )}
+                                                    </div>
                                                 </td>
                                             </tr>
                                         ))}
@@ -311,8 +339,8 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
                         </div>
                     </div>
 
-                    <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-                        <div className="overflow-x-auto">
+                    <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden flex-1 flex flex-col min-h-0">
+                        <div className="flex-1 overflow-auto">
                             <table className="w-full text-sm text-left min-w-[800px]">
                                 <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b">
                                     <tr>
