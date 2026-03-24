@@ -38,7 +38,7 @@ export const ProjectList: React.FC<ProjectListProps> = ({ projects, loginData, o
     { category: '2.0 系統設計', titles: ['規範審查', '圖面設計', '設計審查', '承認圖說', '治具規劃'] },
     { category: '3.0 發包項目', titles: ['標準箱體', '箱體(非標準)', '設備材料'] },
     { category: '4.0 治具整合', titles: ['治具規格', '發包治具'] },
-    { category: '5.0 硬體製作', titles: ['配線', '線路檢查'] },
+    { category: '5.0 硬體製作', titles: ['配線', '線路檢查', '儀器箱配線', '底板配線', '領料部品固定', '機台連線'] },
     { category: '6.0 試車階段', titles: ['軟體調適', '硬體測試', '二次測試'] },
     { category: '7.0 品質檢驗', titles: ['儀器校驗', '設備確認'] }
   ];
@@ -68,7 +68,7 @@ export const ProjectList: React.FC<ProjectListProps> = ({ projects, loginData, o
     });
 
     setEditingProject({
-      id: '', name: '', client: '', budgetHours: 0, status: 'Active',
+      id: '', name: '', client: '', budgetHours: 0, budgetATS: 0, budgetCHS: 0, budgetCPD: 0, budgetMFG: 0, status: 'Active',
       startDate: today,
       wbs: JSON.parse(JSON.stringify(defaultWBS)), // Deep copy default WBS
       tasks: initialTasks, // 帶入預設任務
@@ -140,6 +140,7 @@ export const ProjectList: React.FC<ProjectListProps> = ({ projects, loginData, o
   };
 
   const filteredProjects = projects.filter(p => showClosed ? true : p.status === 'Active');
+  const sortedProjects = [...filteredProjects].sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true, sensitivity: 'base' }));
   const isAdmin = loginData.role === 'Admin';
 
   return (
@@ -181,8 +182,8 @@ export const ProjectList: React.FC<ProjectListProps> = ({ projects, loginData, o
                   <th className="px-6 py-3 w-4">
                       <input 
                         type="checkbox" 
-                        checked={filteredProjects.length > 0 && selectedIds.size === filteredProjects.length} 
-                        onChange={() => toggleAll(filteredProjects)}
+                        checked={sortedProjects.length > 0 && selectedIds.size === sortedProjects.length} 
+                        onChange={() => toggleAll(sortedProjects)}
                         className="w-4 h-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
                       />
                   </th>
@@ -196,7 +197,7 @@ export const ProjectList: React.FC<ProjectListProps> = ({ projects, loginData, o
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {filteredProjects.map(p => (
+            {sortedProjects.map(p => (
               <tr key={p.id} className={`group hover:bg-slate-50 ${selectedIds.has(p.id) ? 'bg-brand-50/30' : ''}`}>
                 {isAdmin && (
                     <td className="px-6 py-4">
@@ -242,7 +243,7 @@ export const ProjectList: React.FC<ProjectListProps> = ({ projects, loginData, o
 
       {/* Mobile Cards */}
       <div className="md:hidden space-y-4">
-          {filteredProjects.map(p => (
+          {sortedProjects.map(p => (
               <div key={p.id} className={`bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex flex-col gap-3 relative ${selectedIds.has(p.id) ? 'ring-2 ring-brand-500 bg-brand-50/20' : ''}`}>
                   {isAdmin && (
                       <div className="absolute top-4 right-4">
@@ -323,13 +324,41 @@ export const ProjectList: React.FC<ProjectListProps> = ({ projects, loginData, o
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">預算總工時 (小時)</label>
-                <input 
-                  type="number"
-                  value={editingProject.budgetHours} 
-                  onChange={e => setEditingProject({...editingProject, budgetHours: Number(e.target.value)})}
-                  className="w-full border border-slate-200 rounded px-3 py-2 text-sm font-mono font-bold focus:ring-2 focus:ring-brand-500 outline-none" 
-                />
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">預算工時分配</label>
+                <div className="grid grid-cols-2 gap-3 mb-2">
+                    <div>
+                        <label className="block text-xs font-bold text-slate-500 mb-1">ATS</label>
+                        <input type="number" value={editingProject.budgetATS || 0} onChange={e => {
+                            const val = Number(e.target.value);
+                            setEditingProject(prev => ({...prev, budgetATS: val, budgetHours: val + (prev.budgetCHS||0) + (prev.budgetCPD||0) + (prev.budgetMFG||0)}));
+                        }} className="w-full border border-slate-200 rounded px-2 py-1.5 text-sm font-mono focus:ring-2 focus:ring-brand-500 outline-none" />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-slate-500 mb-1">CHS</label>
+                        <input type="number" value={editingProject.budgetCHS || 0} onChange={e => {
+                            const val = Number(e.target.value);
+                            setEditingProject(prev => ({...prev, budgetCHS: val, budgetHours: (prev.budgetATS||0) + val + (prev.budgetCPD||0) + (prev.budgetMFG||0)}));
+                        }} className="w-full border border-slate-200 rounded px-2 py-1.5 text-sm font-mono focus:ring-2 focus:ring-brand-500 outline-none" />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-slate-500 mb-1">CPD</label>
+                        <input type="number" value={editingProject.budgetCPD || 0} onChange={e => {
+                            const val = Number(e.target.value);
+                            setEditingProject(prev => ({...prev, budgetCPD: val, budgetHours: (prev.budgetATS||0) + (prev.budgetCHS||0) + val + (prev.budgetMFG||0)}));
+                        }} className="w-full border border-slate-200 rounded px-2 py-1.5 text-sm font-mono focus:ring-2 focus:ring-brand-500 outline-none" />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-slate-500 mb-1">製造</label>
+                        <input type="number" value={editingProject.budgetMFG || 0} onChange={e => {
+                            const val = Number(e.target.value);
+                            setEditingProject(prev => ({...prev, budgetMFG: val, budgetHours: (prev.budgetATS||0) + (prev.budgetCHS||0) + (prev.budgetCPD||0) + val}));
+                        }} className="w-full border border-slate-200 rounded px-2 py-1.5 text-sm font-mono focus:ring-2 focus:ring-brand-500 outline-none" />
+                    </div>
+                </div>
+                <div className="flex justify-between items-center bg-slate-50 px-3 py-2 rounded border border-slate-100">
+                    <span className="text-sm font-bold text-slate-600">總預算工時</span>
+                    <span className="text-lg font-mono font-bold text-brand-600">{(editingProject.budgetATS||0) + (editingProject.budgetCHS||0) + (editingProject.budgetCPD||0) + (editingProject.budgetMFG||0)} h</span>
+                </div>
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-2">專案狀態</label>

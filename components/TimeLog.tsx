@@ -30,7 +30,9 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
     const [historyStartDate, setHistoryStartDate] = useState('');
     const [historyEndDate, setHistoryEndDate] = useState('');
 
-    const activeProjects = projects.filter(p => p.status === 'Active');
+    const activeProjects = [...projects]
+        .filter(p => p.status === 'Active')
+        .sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true, sensitivity: 'base' }));
 
 
 
@@ -162,18 +164,16 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">專案 <span className="text-red-500">*</span></label>
-                                    <input
-                                        list="project-list"
-                                        value={form.projectId}
+                                    <select
+                                        value={form.projectId || ''}
                                         onChange={e => setForm({ ...form, projectId: e.target.value, taskId: '' })}
                                         className="w-full border rounded px-3 py-2 text-sm"
-                                        placeholder="輸入或選擇專案編號"
-                                    />
-                                    <datalist id="project-list">
+                                    >
+                                        <option value="" disabled>選擇專案</option>
                                         {activeProjects.map(p => (
                                             <option key={p.id} value={p.id}>[{p.id}] {p.name}</option>
                                         ))}
-                                    </datalist>
+                                    </select>
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">工程師 <span className="text-red-500">*</span></label>
@@ -210,6 +210,14 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
                                     />
                                     <datalist id="task-list">
                                         {projectTasks.map(t => <option key={t.id} value={t.title} />)}
+                                        {form.projectId && (
+                                            <>
+                                                <option value="儀器箱配線" />
+                                                <option value="底板配線" />
+                                                <option value="領料部品固定" />
+                                                <option value="機台連線" />
+                                            </>
+                                        )}
                                     </datalist>
                                 </div>
                                 <div>

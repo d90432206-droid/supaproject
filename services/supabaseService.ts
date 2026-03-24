@@ -107,6 +107,10 @@ export const SupabaseService = {
           name: p.name,
           client: p.client,
           budgetHours: p.budgethours,
+          budgetATS: details.budgetATS || 0,
+          budgetCHS: details.budgetCHS || 0,
+          budgetCPD: details.budgetCPD || 0,
+          budgetMFG: details.budgetMFG || 0,
           status: p.status as 'Active' | 'Closed',
           startDate: p.startdate,
           endDate: p.enddate,
@@ -162,7 +166,11 @@ export const SupabaseService = {
         wbs: project.wbs,
         engineers: project.engineers,
         tasks: project.tasks,
-        holidays: project.holidays
+        holidays: project.holidays,
+        budgetATS: project.budgetATS || 0,
+        budgetCHS: project.budgetCHS || 0,
+        budgetCPD: project.budgetCPD || 0,
+        budgetMFG: project.budgetMFG || 0
       };
       const safeEndDate = project.endDate && project.endDate.trim() !== '' ? project.endDate : null;
 

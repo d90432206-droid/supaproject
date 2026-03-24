@@ -36,6 +36,10 @@ export interface Project {
   name: string;
   client: string;
   budgetHours: number;
+  budgetATS?: number;
+  budgetCHS?: number;
+  budgetCPD?: number;
+  budgetMFG?: number;
   status: 'Active' | 'Closed';
   startDate: string;
   endDate: string | null;

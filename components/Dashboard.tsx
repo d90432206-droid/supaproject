@@ -33,8 +33,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ projects, logs, messages, 
   // 定義要排除在儀表板統計之外的專案 ID
   const EXCLUDED_IDS = ['INTERNAL', 'MAINT', 'OFFICE'];
 
-  const activeProjects = projects.filter(p => p.status === 'Active' && !EXCLUDED_IDS.includes(p.id));
-  const closedProjects = projects.filter(p => p.status === 'Closed' && !EXCLUDED_IDS.includes(p.id));
+  const activeProjects = [...projects]
+    .filter(p => p.status === 'Active' && !EXCLUDED_IDS.includes(p.id))
+    .sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true, sensitivity: 'base' }));
+  const closedProjects = [...projects]
+    .filter(p => p.status === 'Closed' && !EXCLUDED_IDS.includes(p.id))
+    .sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true, sensitivity: 'base' }));
 
   // KPI Calculations
   // Fix: Only count budget for Active projects
@@ -58,7 +62,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ projects, logs, messages, 
         const actual = logs.filter(l => l.projectId === p.id).reduce((s, l) => s + l.hours, 0);
         return { ...p, actualHours: Math.round(actual * 10) / 10, usage: p.budgetHours > 0 ? (actual / p.budgetHours) : 0 };
       })
-      .filter(p => p.budgetHours > 0 && p.actualHours > (p.budgetHours * 0.8));
+      .filter(p => p.budgetHours > 0 && p.actualHours > (p.budgetHours * 0.8))
+      .sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true, sensitivity: 'base' }));
   }, [projects, logs]);
 
   const availableYears = useMemo(() => {
@@ -75,12 +80,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ projects, logs, messages, 
       targetProjects = targetProjects.filter(p => p.status === 'Closed');
     }
 
-    return targetProjects.map(p => ({
-      id: p.id,
-      name: p.name,
-      budget: p.budgetHours,
-      actual: Math.round(logs.filter(l => l.projectId === p.id).reduce((s, l) => s + l.hours, 0) * 10) / 10
-    }));
+    return targetProjects
+      .sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true, sensitivity: 'base' }))
+      .map(p => ({
+        id: p.id,
+        name: p.name,
+        budget: p.budgetHours,
+        actual: Math.round(logs.filter(l => l.projectId === p.id).reduce((s, l) => s + l.hours, 0) * 10) / 10
+      }));
   }, [projects, logs, barChartFilter]);
 
   const pieData = useMemo(() => {
