@@ -38,8 +38,8 @@ export const ProjectList: React.FC<ProjectListProps> = ({ projects, loginData, o
     { category: '2.0 系統設計', titles: ['規範審查', '圖面設計', '設計審查', '承認圖說', '治具規劃'] },
     { category: '3.0 發包項目', titles: ['標準箱體', '箱體(非標準)', '設備材料'] },
     { category: '4.0 治具整合', titles: ['治具規格', '發包治具'] },
-    { category: '5.0 硬體製作', titles: ['配線', '線路檢查', '儀器箱配線', '底板配線', '領料部品固定', '機台連線'] },
-    { category: '6.0 試車階段', titles: ['軟體調適', '硬體測試', '二次測試'] },
+    { category: '5.0 硬體製作', titles: ['配線', '線路檢查', '儀器箱配線', '底板配線', '領料部品固定'] },
+    { category: '6.0 試車階段', titles: ['機台連線', '軟體調適', '硬體測試', '二次測試'] },
     { category: '7.0 品質檢驗', titles: ['儀器校驗', '設備確認'] }
   ];
 
@@ -328,30 +328,34 @@ export const ProjectList: React.FC<ProjectListProps> = ({ projects, loginData, o
                 <div className="grid grid-cols-2 gap-3 mb-2">
                     <div>
                         <label className="block text-xs font-bold text-slate-500 mb-1">ATS</label>
-                        <input type="number" value={editingProject.budgetATS || 0} onChange={e => {
-                            const val = Number(e.target.value);
-                            setEditingProject(prev => ({...prev, budgetATS: val, budgetHours: val + (prev.budgetCHS||0) + (prev.budgetCPD||0) + (prev.budgetMFG||0)}));
+                        <input type="number" value={editingProject.budgetATS ?? ''} onChange={e => {
+                            const valStr = e.target.value;
+                            const val = valStr === '' ? undefined : Number(valStr);
+                            setEditingProject(prev => ({...prev, budgetATS: val, budgetHours: (val||0) + (prev.budgetCHS||0) + (prev.budgetCPD||0) + (prev.budgetMFG||0)}));
                         }} className="w-full border border-slate-200 rounded px-2 py-1.5 text-sm font-mono focus:ring-2 focus:ring-brand-500 outline-none" />
                     </div>
                     <div>
                         <label className="block text-xs font-bold text-slate-500 mb-1">CHS</label>
-                        <input type="number" value={editingProject.budgetCHS || 0} onChange={e => {
-                            const val = Number(e.target.value);
-                            setEditingProject(prev => ({...prev, budgetCHS: val, budgetHours: (prev.budgetATS||0) + val + (prev.budgetCPD||0) + (prev.budgetMFG||0)}));
+                        <input type="number" value={editingProject.budgetCHS ?? ''} onChange={e => {
+                            const valStr = e.target.value;
+                            const val = valStr === '' ? undefined : Number(valStr);
+                            setEditingProject(prev => ({...prev, budgetCHS: val, budgetHours: (prev.budgetATS||0) + (val||0) + (prev.budgetCPD||0) + (prev.budgetMFG||0)}));
                         }} className="w-full border border-slate-200 rounded px-2 py-1.5 text-sm font-mono focus:ring-2 focus:ring-brand-500 outline-none" />
                     </div>
                     <div>
                         <label className="block text-xs font-bold text-slate-500 mb-1">CPD</label>
-                        <input type="number" value={editingProject.budgetCPD || 0} onChange={e => {
-                            const val = Number(e.target.value);
-                            setEditingProject(prev => ({...prev, budgetCPD: val, budgetHours: (prev.budgetATS||0) + (prev.budgetCHS||0) + val + (prev.budgetMFG||0)}));
+                        <input type="number" value={editingProject.budgetCPD ?? ''} onChange={e => {
+                            const valStr = e.target.value;
+                            const val = valStr === '' ? undefined : Number(valStr);
+                            setEditingProject(prev => ({...prev, budgetCPD: val, budgetHours: (prev.budgetATS||0) + (prev.budgetCHS||0) + (val||0) + (prev.budgetMFG||0)}));
                         }} className="w-full border border-slate-200 rounded px-2 py-1.5 text-sm font-mono focus:ring-2 focus:ring-brand-500 outline-none" />
                     </div>
                     <div>
                         <label className="block text-xs font-bold text-slate-500 mb-1">製造</label>
-                        <input type="number" value={editingProject.budgetMFG || 0} onChange={e => {
-                            const val = Number(e.target.value);
-                            setEditingProject(prev => ({...prev, budgetMFG: val, budgetHours: (prev.budgetATS||0) + (prev.budgetCHS||0) + (prev.budgetCPD||0) + val}));
+                        <input type="number" value={editingProject.budgetMFG ?? ''} onChange={e => {
+                            const valStr = e.target.value;
+                            const val = valStr === '' ? undefined : Number(valStr);
+                            setEditingProject(prev => ({...prev, budgetMFG: val, budgetHours: (prev.budgetATS||0) + (prev.budgetCHS||0) + (prev.budgetCPD||0) + (val||0)}));
                         }} className="w-full border border-slate-200 rounded px-2 py-1.5 text-sm font-mono focus:ring-2 focus:ring-brand-500 outline-none" />
                     </div>
                 </div>

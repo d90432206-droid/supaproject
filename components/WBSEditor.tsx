@@ -66,6 +66,27 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
     const [showWBSModal, setShowWBSModal] = useState(false);
     const [editingTask, setEditingTask] = useState<Partial<Task>>({});
 
+    const taskHoursMap = useMemo(() => {
+        const map: Record<string, number> = {};
+        (logs || []).forEach(l => {
+            if (l.taskId && l.hours) {
+                map[String(l.taskId)] = (map[String(l.taskId)] || 0) + Number(l.hours);
+            }
+        });
+        return map;
+    }, [logs]);
+
+    const handleBulkAutoProgress = () => {
+        if (!confirm("確定要根據已登錄的報表工時，重新計算並覆寫所有任務的進度嗎？\n(計算方式: 已投入工時 / (工期*8小時) * 100%)")) return;
+        const newTasks = (localProject.tasks || []).map(task => {
+            const accumulatedHours = taskHoursMap[task.id] || 0;
+            const estimatedHours = (task.duration || 1) * 8;
+            const autoProgress = Math.min(100, Math.round((accumulatedHours / estimatedHours) * 100));
+            return { ...task, progress: autoProgress };
+        });
+        setLocalProject({ ...localProject, tasks: newTasks });
+    };
+
     // Delay Reason Modal
     const [showDelayModal, setShowDelayModal] = useState(false);
     const [pendingDelayTask, setPendingDelayTask] = useState<{ task: Task, newDate: string } | null>(null);
@@ -118,10 +139,31 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
     const isTeamMember = (localProject.engineers || []).some(e => e.name === loginData.name);
     const canUpdateProgress = canManage || isTeamMember;
 
-    // Sync from prop (Fix unsaved warning sticking)
+    // Sync from prop (Fix unsaved warning sticking) and auto-calculate progress from logs
     useEffect(() => {
-        setLocalProject(JSON.parse(JSON.stringify(project)));
-    }, [project]);
+        const p = JSON.parse(JSON.stringify(project)) as Project;
+        
+        const map: Record<string, number> = {};
+        (logs || []).forEach(l => {
+            if (l.taskId && l.hours) {
+                map[String(l.taskId)] = (map[String(l.taskId)] || 0) + Number(l.hours);
+            }
+        });
+
+        if (p.tasks) {
+            p.tasks = p.tasks.map(task => {
+                const accumulatedHours = map[String(task.id)] || 0;
+                if (accumulatedHours > 0) {
+                    const estimatedHours = (task.duration || 1) * 8;
+                    const autoProgress = Math.min(100, Math.round((accumulatedHours / estimatedHours) * 100));
+                    return { ...task, progress: Math.max(task.progress, autoProgress) };
+                }
+                return task;
+            });
+        }
+        
+        setLocalProject(p);
+    }, [project, logs]);
 
     const hasUnsavedChanges = useMemo(() => {
         return JSON.stringify(localProject) !== JSON.stringify(project);
@@ -836,7 +878,10 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                         <button onClick={scrollToToday} className="px-3 py-1 bg-red-500 text-white text-xs font-bold rounded shadow-sm hover:bg-red-600 flex items-center"><i className="fa-solid fa-calendar-day mr-1"></i> TODAY</button>
                     </div>
                     {canManage && (
-                        <button onClick={handleAddTask} className="bg-brand-600 text-white py-1.5 px-3 rounded-md text-xs font-bold shadow-sm flex-shrink-0"><i className="fa-solid fa-plus mr-1"></i>新增任務</button>
+                        <div className="flex gap-2">
+                            <button onClick={handleBulkAutoProgress} className="bg-amber-500 hover:bg-amber-600 text-white py-1.5 px-3 rounded-md text-xs font-bold shadow-sm flex-shrink-0" title="根據所有同仁登錄的日報表資料，自動彙總並換算為百分比，一鍵覆寫所有任務進度"><i className="fa-solid fa-bolt mr-1"></i>一鍵帶入進度</button>
+                            <button onClick={handleAddTask} className="bg-brand-600 text-white py-1.5 px-3 rounded-md text-xs font-bold shadow-sm flex-shrink-0"><i className="fa-solid fa-plus mr-1"></i>新增任務</button>
+                        </div>
                     )}
                 </div>
 
@@ -947,7 +992,11 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                                             </div>
                                         </div>
 
-                                        {!cat.collapsed && (localProject.tasks || []).filter(t => t.category === cat.name).map(task => (
+                                        {!cat.collapsed && (localProject.tasks || []).filter(t => t.category === cat.name).map(task => {
+                                            const accumulatedHours = taskHoursMap[task.id] || 0;
+                                            const estimatedHours = (task.duration || 1) * 8;
+                                            const isOvertime = accumulatedHours > estimatedHours;
+                                            return (
                                             <div key={task.id} className="gantt-row flex h-9 border-b border-slate-100 relative group hover:bg-blue-50/20">
                                                 {/* Sticky Task Info - Z-Index 60 to cover Today Line (30) */}
                                                 <div className="sticky left-0 bg-white z-[60] flex items-center px-4 border-r border-slate-200 sticky-left-col shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] cursor-pointer"
@@ -955,12 +1004,15 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                                                     onClick={() => { setEditingTask({ ...task }); setShowEditModal(true); }}>
                                                     <div className="w-full truncate">
                                                         <div className="flex justify-between items-center">
-                                                            <span className="text-xs font-medium text-slate-700 truncate">{task.title}</span>
-                                                            {task.delayReason && <i className="fa-solid fa-circle-exclamation text-amber-500 text-[10px] ml-1" title={`延遲原因: ${task.delayReason}`}></i>}
+                                                            <div className="flex items-center gap-1 overflow-hidden">
+                                                                <span className="text-xs font-medium text-slate-700 truncate">{task.title}</span>
+                                                                {isOvertime && <i className="fa-solid fa-triangle-exclamation text-red-500 text-[10px] shrink-0" title={`工時已超標！累計 ${accumulatedHours}h / 預估 ${estimatedHours}h`}></i>}
+                                                            </div>
+                                                            {task.delayReason && <i className="fa-solid fa-circle-exclamation text-amber-500 text-[10px] ml-1 shrink-0" title={`延遲原因: ${task.delayReason}`}></i>}
                                                         </div>
-                                                        <div className="w-full h-3 bg-slate-100 rounded-full mt-0.5 overflow-hidden relative border border-slate-200">
-                                                            <div className="h-full bg-brand-500" style={{ width: `${task.progress}%` }}></div>
-                                                            <div className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-slate-600 leading-none drop-shadow-sm">{task.progress}%</div>
+                                                        <div className={`w-full h-3 rounded-full mt-0.5 overflow-hidden relative border ${isOvertime ? 'bg-red-50 border-red-200' : 'bg-slate-100 border-slate-200'}`}>
+                                                            <div className={`h-full ${isOvertime ? 'bg-red-500/80' : 'bg-brand-500'}`} style={{ width: `${Math.min(100, task.progress)}%` }}></div>
+                                                            <div className={`absolute inset-0 flex items-center justify-center text-[9px] font-bold leading-none drop-shadow-sm ${isOvertime ? 'text-red-900' : 'text-slate-600'}`}>{task.progress}%</div>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -981,7 +1033,8 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                                                     </div>
                                                 </div>
                                             </div>
-                                        ))}
+                                        );
+                                        })}
                                     </div>
                                 ))}
                             </div>
@@ -1103,7 +1156,23 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="text-xs font-bold text-slate-500 block mb-1">進度 %</label>
+                                    <label className="text-xs font-bold text-slate-500 flex justify-between items-center mb-1">
+                                        <span>進度 %</span>
+                                        {editingTask.id && canUpdateProgress && (
+                                            <button 
+                                                onClick={() => {
+                                                    const accumulatedHours = logs.filter(l => l.taskId == editingTask.id).reduce((s, l) => s + l.hours, 0);
+                                                    const estimatedHours = (editingTask.duration || 1) * 8;
+                                                    const autoProgress = Math.min(100, Math.round((accumulatedHours / estimatedHours) * 100));
+                                                    setEditingTask({ ...editingTask, progress: autoProgress });
+                                                }}
+                                                className="text-[10px] bg-brand-50 text-brand-600 px-1.5 py-0.5 rounded hover:bg-brand-100 transition-colors shadow-sm"
+                                                title="將自動彙總本任務所有成員填寫的日報工時，換算為百分比 (1天以8小時計)"
+                                            >
+                                                <i className="fa-solid fa-calculator mr-1"></i>自動帶入工時
+                                            </button>
+                                        )}
+                                    </label>
                                     <input
                                         type="number"
                                         min="0"
@@ -1113,6 +1182,11 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                                         className="w-full border rounded px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-500"
                                         disabled={!canUpdateProgress}
                                     />
+                                    {editingTask.id && (
+                                        <div className="text-[10px] text-slate-400 mt-1">
+                                            累計已投入: {logs.filter(l => l.taskId == editingTask.id).reduce((s, l) => s + l.hours, 0)}h / 預估總工時: {(editingTask.duration || 1) * 8}h
+                                        </div>
+                                    )}
                                 </div>
                                 <div>
                                     <label className="text-xs font-bold text-slate-500 block mb-1">延遲原因</label>

@@ -192,33 +192,28 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">任務</label>
-                                    <input
-                                        list="task-list"
-                                        value={(() => {
-                                            // Ensure we display the title in the input
-                                            const matched = projectTasks.find(t => t.id == form.taskId);
-                                            return matched ? matched.title : form.taskId;
-                                        })()}
-                                        onChange={e => {
-                                            const val = e.target.value;
-                                            // Try to map back to ID
-                                            const matched = projectTasks.find(t => t.title === val);
-                                            setForm({ ...form, taskId: matched ? matched.id : val });
-                                        }}
-                                        className="w-full border rounded px-3 py-2 text-sm"
-                                        placeholder="輸入或選擇任務"
-                                    />
-                                    <datalist id="task-list">
-                                        {projectTasks.map(t => <option key={t.id} value={t.title} />)}
-                                        {form.projectId && (
-                                            <>
-                                                <option value="儀器箱配線" />
-                                                <option value="底板配線" />
-                                                <option value="領料部品固定" />
-                                                <option value="機台連線" />
-                                            </>
-                                        )}
-                                    </datalist>
+                                    {['DAY OFF', 'INTERNAL', 'MAINT', 'OFFICE'].includes(form.projectId || '') ? (
+                                        <input
+                                            type="text"
+                                            value={form.taskId || ''}
+                                            onChange={e => setForm({ ...form, taskId: e.target.value })}
+                                            className="w-full border rounded px-3 py-2 text-sm"
+                                            placeholder="輸入任務名稱"
+                                        />
+                                    ) : (
+                                        <select
+                                            value={form.taskId || ''}
+                                            onChange={e => setForm({ ...form, taskId: e.target.value })}
+                                            className="w-full border rounded px-3 py-2 text-sm"
+                                        >
+                                            <option value="" disabled>選擇任務</option>
+                                            {projectTasks.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
+                                            {form.taskId && 
+                                             !projectTasks.find(t => t.id == form.taskId) && (
+                                                <option value={form.taskId}>{form.taskId}</option>
+                                            )}
+                                        </select>
+                                    )}
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">工時</label>
