@@ -86,19 +86,23 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
         });
     };
 
+    const handleCancel = () => {
+        setForm({
+            date: new Date().toISOString().split('T')[0],
+            hours: 1,
+            engineer: loginData.role === 'Engineer' ? loginData.user : '',
+            projectId: '',
+            taskId: '',
+            note: '',
+            logId: undefined
+        });
+    };
+
     const handleDelete = (logId: number) => {
         onDeleteLog(logId);
         // If we are currently editing the deleted log, reset the form
         if (form.logId === logId) {
-            setForm({
-                date: new Date().toISOString().split('T')[0],
-                hours: 1,
-                engineer: loginData.role === 'Engineer' ? loginData.user : '',
-                projectId: '',
-                taskId: '',
-                note: '',
-                logId: undefined
-            });
+            handleCancel();
         }
     };
 
@@ -223,9 +227,20 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
                                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">備註</label>
                                     <textarea value={form.note} onChange={e => setForm({ ...form, note: e.target.value })} className="w-full border rounded px-3 py-2 text-sm h-20" placeholder="工作內容..."></textarea>
                                 </div>
-                                <button onClick={handleSubmit} className="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-2.5 rounded shadow-lg">
-                                    {form.logId ? '更新紀錄' : '提交日報'}
-                                </button>
+                                {form.logId ? (
+                                    <div className="flex gap-2">
+                                        <button onClick={handleCancel} className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2.5 rounded transition-colors">
+                                            取消
+                                        </button>
+                                        <button onClick={handleSubmit} className="flex-1 bg-brand-600 hover:bg-brand-700 text-white font-bold py-2.5 rounded shadow-lg transition-colors">
+                                            更新紀錄
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <button onClick={handleSubmit} className="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-2.5 rounded shadow-lg transition-colors">
+                                        提交日報
+                                    </button>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -248,12 +263,12 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
                                 <table className="w-full text-left border-collapse">
                                     <thead className="text-[11px] text-slate-500 uppercase bg-slate-50 border-b sticky top-0 z-10 shadow-sm">
                                         <tr>
+                                            <th className="px-2 py-2 whitespace-nowrap bg-slate-50 w-20">操作</th>
                                             <th className="px-3 py-2 whitespace-nowrap bg-slate-50">日期</th>
                                             <th className="px-3 py-2 whitespace-nowrap bg-slate-50">人員</th>
                                             <th className="px-3 py-2 whitespace-nowrap bg-slate-50">專案</th>
                                             <th className="px-3 py-2 bg-slate-50 w-full min-w-[150px]">任務/備註</th>
                                             <th className="px-3 py-2 text-right whitespace-nowrap bg-slate-50">時數</th>
-                                            <th className="px-2 py-2 text-right whitespace-nowrap bg-slate-50">操作</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100 text-xs">
@@ -262,9 +277,22 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
                                         ) : sortedLogs.map((log, idx) => (
                                             <tr 
                                                 key={log.logId || idx} 
-                                                onClick={() => handleEdit(log)}
-                                                className={`group cursor-pointer transition-colors ${form.logId === log.logId ? 'bg-brand-50 border-l-2 border-brand-500' : 'hover:bg-slate-50'}`}
+                                                className={`transition-colors ${form.logId === log.logId ? 'bg-brand-50 border-l-2 border-brand-500' : 'hover:bg-slate-50'}`}
                                             >
+                                                <td className="px-2 py-2">
+                                                    <div className="flex gap-1">
+                                                        {(loginData.role === 'Admin' || log.engineer === loginData.user) && (
+                                                            <>
+                                                                <button onClick={(e) => { e.stopPropagation(); handleEdit(log); }} className="p-1 px-2 text-slate-400 hover:text-brand-600 transition-colors" title="編輯">
+                                                                    <i className="fa-solid fa-pen"></i>
+                                                                </button>
+                                                                <button onClick={(e) => { e.stopPropagation(); handleDelete(log.logId); }} className="p-1 px-2 text-slate-400 hover:text-red-600 transition-colors" title="刪除">
+                                                                    <i className="fa-solid fa-trash-can"></i>
+                                                                </button>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </td>
                                                 <td className="px-3 py-2 text-slate-500 whitespace-nowrap font-mono">{log.date.slice(5)}</td>
                                                 <td className="px-3 py-2 font-bold text-slate-700 whitespace-nowrap">{log.engineer}</td>
                                                 <td className="px-3 py-2 text-brand-600 font-medium whitespace-nowrap max-w-[120px] truncate" title={getProjectDisplay(log.projectId)}>
@@ -293,20 +321,6 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
                                                     <div className="text-slate-500 truncate max-w-[300px]">{log.note}</div>
                                                 </td>
                                                 <td className="px-3 py-2 text-right font-mono font-bold text-[13px]">{log.hours}</td>
-                                                <td className="px-2 py-2 text-right">
-                                                    <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        {(loginData.role === 'Admin' || log.engineer === loginData.user) && (
-                                                            <>
-                                                                <button onClick={(e) => { e.stopPropagation(); handleEdit(log); }} className="p-1 px-2 text-slate-400 hover:text-brand-600 transition-colors">
-                                                                    <i className="fa-solid fa-pen"></i>
-                                                                </button>
-                                                                <button onClick={(e) => { e.stopPropagation(); handleDelete(log.logId); }} className="p-1 px-2 text-slate-400 hover:text-red-600 transition-colors">
-                                                                    <i className="fa-solid fa-trash-can"></i>
-                                                                </button>
-                                                            </>
-                                                        )}
-                                                    </div>
-                                                </td>
                                             </tr>
                                         ))}
                                     </tbody>
