@@ -32,12 +32,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ projects, logs, messages, 
 
   // 定義要排除在儀表板統計之外的專案 ID
   const EXCLUDED_IDS = ['INTERNAL', 'MAINT', 'OFFICE'];
+  // 定義要排除在儀表板統計之外的客戶名稱
+  const EXCLUDED_CLIENTS = ['公司內部', '維修服務'];
 
   const activeProjects = [...projects]
-    .filter(p => p.status === 'Active' && !EXCLUDED_IDS.includes(p.id))
+    .filter(p => p.status === 'Active' && !EXCLUDED_IDS.includes(p.id) && !EXCLUDED_CLIENTS.includes(p.client))
     .sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true, sensitivity: 'base' }));
   const closedProjects = [...projects]
-    .filter(p => p.status === 'Closed' && !EXCLUDED_IDS.includes(p.id))
+    .filter(p => p.status === 'Closed' && !EXCLUDED_IDS.includes(p.id) && !EXCLUDED_CLIENTS.includes(p.client))
     .sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true, sensitivity: 'base' }));
 
   // KPI Calculations
@@ -57,7 +59,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ projects, logs, messages, 
   const alertProjects = useMemo(() => {
     // 預警專案也排除虛擬專案
     return projects
-      .filter(p => !EXCLUDED_IDS.includes(p.id))
+      .filter(p => !EXCLUDED_IDS.includes(p.id) && !EXCLUDED_CLIENTS.includes(p.client))
       .map(p => {
         const actual = logs.filter(l => l.projectId === p.id).reduce((s, l) => s + l.hours, 0);
         return { ...p, actualHours: Math.round(actual * 10) / 10, usage: p.budgetHours > 0 ? (actual / p.budgetHours) : 0 };
@@ -73,7 +75,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ projects, logs, messages, 
 
   // 修改：BarData 根據 barChartFilter 進行篩選，並排除虛擬專案
   const barData = useMemo(() => {
-    let targetProjects = projects.filter(p => !EXCLUDED_IDS.includes(p.id));
+    // 根據使用者要求排除虛擬專案與特定客戶
+    let targetProjects = projects.filter(p => !EXCLUDED_IDS.includes(p.id) && !EXCLUDED_CLIENTS.includes(p.client));
     if (barChartFilter === 'Active') {
       targetProjects = targetProjects.filter(p => p.status === 'Active');
     } else if (barChartFilter === 'Closed') {
@@ -95,7 +98,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ projects, logs, messages, 
     // 根據使用者需求「不想讓這幾個項目在儀表板統計」，通常包含工時分佈
     let filteredLogs = logs
       .filter(l => l.date.startsWith(yearFilter))
-      .filter(l => !EXCLUDED_IDS.includes(l.projectId));
+      .filter(l => {
+        const p = projects.find(proj => proj.id === l.projectId);
+        return !EXCLUDED_IDS.includes(l.projectId) && (!p || !EXCLUDED_CLIENTS.includes(p.client));
+      });
 
     if (projectFilter) {
       filteredLogs = filteredLogs.filter(l => l.projectId === projectFilter);
@@ -281,7 +287,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ projects, logs, messages, 
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         {/* Bar Chart */}
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col h-[400px]">
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col h-[600px]">
           <div className="flex justify-between items-center mb-4">
             <h3 className="font-bold text-slate-700 flex items-center gap-2">
               預算 vs 實際
@@ -306,12 +312,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ projects, logs, messages, 
                 cursor={{ fill: '#f1f5f9' }}
                 content={({ active, payload, label }) => {
                   if (active && payload && payload.length) {
-                    const projName = barData.find(d => d.id === label)?.name;
+                    const data = barData.find(d => d.id === label);
+                    const isOver = data && data.actual > data.budget;
                     return (
                       <div className="bg-white p-2 border border-slate-200 shadow-lg rounded text-xs">
-                        <p className="font-bold mb-1">{projName} ({label})</p>
+                        <p className="font-bold mb-1">{data?.name} ({label}) {isOver && <span className="text-red-500 text-[10px] ml-1">超支!</span>}</p>
                         <p className="text-slate-500">預算: {payload[0].value}h</p>
-                        <p className="text-blue-600">實際: {payload[1].value}h</p>
+                        <p className={isOver ? 'text-red-600 font-bold' : 'text-blue-600'}>實際: {payload[1].value}h</p>
                       </div>
                     );
                   }
@@ -319,13 +326,20 @@ export const Dashboard: React.FC<DashboardProps> = ({ projects, logs, messages, 
                 }}
               />
               <Bar dataKey="budget" name="預算工時" fill="#cbd5e1" barSize={12} radius={[0, 4, 4, 0]} />
-              <Bar dataKey="actual" name="實際工時" fill="#3b82f6" barSize={12} radius={[0, 4, 4, 0]} />
+              <Bar dataKey="actual" name="實際工時" barSize={12} radius={[0, 4, 4, 0]}>
+                {barData.map((entry, index) => (
+                  <Cell 
+                    key={`cell-${index}`} 
+                    fill={entry.actual > entry.budget ? '#ef4444' : '#3b82f6'} 
+                  />
+                ))}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
 
         {/* Pie Chart */}
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col h-[400px]">
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col h-[600px]">
           <div className="flex flex-col gap-2 mb-4">
             <h3 className="font-bold text-slate-700">人力資源分佈</h3>
             <div className="flex gap-2">
@@ -344,8 +358,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ projects, logs, messages, 
                 className="flex-[2] text-xs border border-slate-200 rounded px-2 py-1 bg-slate-50 outline-none focus:border-brand-500"
               >
                 <option value="">全公司總覽</option>
-                {projects.filter(p => !EXCLUDED_IDS.includes(p.id)).map(p => (
-                  <option key={p.id} value={p.id}>{p.name} ({p.id})</option>
+                {projects
+                  .filter(p => !EXCLUDED_IDS.includes(p.id))
+                  .sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true, sensitivity: 'base' }))
+                  .map(p => (
+                    <option key={p.id} value={p.id}>{p.name} ({p.id})</option>
                 ))}
               </select>
             </div>
@@ -445,7 +462,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ projects, logs, messages, 
                 {alertProjects.length > 0 ? (
                   alertProjects.map(p => (
                     <tr key={p.id} className="hover:bg-slate-50">
-                      <td className="px-6 py-3 font-medium text-slate-800 truncate max-w-[120px]" title={p.name}>{p.name}</td>
+                      <td className="px-6 py-3 font-medium text-slate-800">
+                        <div className="flex flex-col">
+                          <span className="truncate max-w-[150px]" title={p.name}>{p.name}</span>
+                          <span className="text-[10px] font-mono text-slate-400">{p.id}</span>
+                        </div>
+                      </td>
                       <td className="px-6 py-3 text-right font-mono">{p.budgetHours}h</td>
                       <td className="px-6 py-3 text-right font-mono text-red-600 font-bold">{p.actualHours}h</td>
                       <td className="px-6 py-3 text-right">

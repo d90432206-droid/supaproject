@@ -135,6 +135,15 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
             : rangeLogs;
 
         const grouped: Record<string, { projects: Record<string, Record<string, number>> }> = {};
+        
+        // Initialize with ALL engineers to ensure they all show up, sorted by name
+        engineers
+            .slice()
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .forEach(eng => {
+                grouped[eng.name] = { projects: {} };
+            });
+
         filteredLogs.forEach(l => {
             if (!grouped[l.engineer]) grouped[l.engineer] = { projects: {} };
             if (!grouped[l.engineer].projects[l.projectId]) grouped[l.engineer].projects[l.projectId] = {};
@@ -142,7 +151,7 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
             grouped[l.engineer].projects[l.projectId][l.date] = curr + l.hours;
         });
         return grouped;
-    }, [logs, weekDays, weeklyProjectFilter]);
+    }, [logs, weekDays, weeklyProjectFilter, engineers]);
 
     return (
         <div className="flex-1 overflow-y-auto lg:overflow-hidden p-2 md:p-4 animate-in fade-in flex flex-col min-h-0">
@@ -188,7 +197,10 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
                                         className="w-full border rounded px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-600 cursor-pointer disabled:cursor-not-allowed"
                                     >
                                         <option value="" disabled>選擇成員</option>
-                                        {engineers.map(e => <option key={e.name} value={e.name}>{e.name}</option>)}
+                                        {engineers
+                                          .slice()
+                                          .sort((a, b) => a.name.localeCompare(b.name))
+                                          .map(e => <option key={e.name} value={e.name}>{e.name}</option>)}
                                     </select>
                                     {loginData.role === 'Engineer' && (
                                         <p className="text-[10px] text-slate-400 mt-1"><i className="fa-solid fa-lock mr-1"></i>已鎖定為登入帳號</p>
@@ -344,7 +356,10 @@ export const TimeLog: React.FC<TimeLogProps> = ({ projects, logs, loginData, eng
                                 className="border rounded px-2 py-1 text-sm max-w-[150px] md:max-w-[200px]"
                             >
                                 <option value="">全部專案</option>
-                                {projects.map(p => (
+                                {projects
+                                    .slice()
+                                    .sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true, sensitivity: 'base' }))
+                                    .map(p => (
                                     <option key={p.id} value={p.id}>[{p.id}] {p.name}</option>
                                 ))}
                             </select>
