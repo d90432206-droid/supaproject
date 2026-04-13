@@ -138,10 +138,13 @@ export const SupabaseService = {
         if (s.key === 'AdminPassword') {
           adminPassword = String(s.value);
         } else if (s.key.startsWith('User:')) {
+          const desc = s.description || '';
+          const [color, dept] = desc.includes('|') ? desc.split('|') : [desc, ''];
           globalEngineers.push({
             name: s.key.replace('User:', ''),
             password: String(s.value),
-            color: s.description || '#3b82f6'
+            color: color || '#3b82f6',
+            department: dept || ''
           });
         }
       });
@@ -250,7 +253,7 @@ export const SupabaseService = {
       const payload = {
         key: `User:${eng.name}`,
         value: eng.password, 
-        description: eng.color 
+        description: `${eng.color}|${eng.department || ''}`
       };
       const { error } = await supabase
         .from(CONFIG.SUPABASE.TABLES.SETTINGS)

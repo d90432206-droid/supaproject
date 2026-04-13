@@ -113,6 +113,12 @@ export const Layout: React.FC<LayoutProps> = ({
             isActive={currentView === 'timelog'} 
             onClick={() => handleNavClick('timelog')} 
           />
+          <NavItem 
+            icon="fa-file-invoice" 
+            label="專案完工統計" 
+            isActive={currentView === 'project-summary'} 
+            onClick={() => handleNavClick('project-summary')} 
+          />
           
           {/* Admin Only Button */}
           {loginData.role === 'Admin' && (

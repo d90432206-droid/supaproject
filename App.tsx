@@ -5,6 +5,7 @@ import { Dashboard } from './components/Dashboard';
 import { ProjectList } from './components/ProjectList';
 import { WBSEditor } from './components/WBSEditor';
 import { TimeLog } from './components/TimeLog';
+import { ProjectSummary } from './components/ProjectSummary';
 import { SupabaseService } from './services/supabaseService';
 import { Project, Log, LoginData, ViewState, GlobalEngineer, SystemMessage } from './types';
 
@@ -201,7 +202,8 @@ function App() {
     const newEng: GlobalEngineer = {
       name: editingEngineer.name,
       password: editingEngineer.password,
-      color: editingEngineer.color || '#3b82f6'
+      color: editingEngineer.color || '#3b82f6',
+      department: editingEngineer.department || ''
     };
 
     // UI Update
@@ -393,6 +395,14 @@ function App() {
             onDeleteLog={handleLogDelete}
           />
         )}
+        {currentView === 'project-summary' && (
+          <ProjectSummary
+            projects={projects}
+            logs={logs}
+            engineers={globalEngineers}
+            loginData={loginData}
+          />
+        )}
       </Layout>
 
       {/* Admin Member Management Modal */}
@@ -418,11 +428,27 @@ function App() {
                   <input value={editingEngineer.password || ''} onChange={e => setEditingEngineer({ ...editingEngineer, password: e.target.value })} className="w-full border rounded px-3 py-2 text-sm font-mono" placeholder="設定密碼" />
                 </div>
               </div>
-              <div className="mb-3">
-                <label className="text-xs font-bold text-slate-500 uppercase block mb-1">代表色</label>
-                <div className="flex gap-2 items-center">
-                  <input type="color" value={editingEngineer.color || '#3b82f6'} onChange={e => setEditingEngineer({ ...editingEngineer, color: e.target.value })} className="h-9 w-16 cursor-pointer border rounded" />
-                  <span className="text-xs text-slate-400">用於甘特圖顯示</span>
+              <div className="grid grid-cols-2 gap-4 mb-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-500 uppercase block mb-1">所屬部門</label>
+                  <select 
+                    value={editingEngineer.department || ''} 
+                    onChange={e => setEditingEngineer({ ...editingEngineer, department: e.target.value })} 
+                    className="w-full border rounded px-3 py-2 text-sm"
+                  >
+                    <option value="">未設定</option>
+                    <option value="ATS">ATS</option>
+                    <option value="CHS">CHS</option>
+                    <option value="CPD">CPD</option>
+                    <option value="MFG">MFG</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 uppercase block mb-1">代表色</label>
+                  <div className="flex gap-2 items-center">
+                    <input type="color" value={editingEngineer.color || '#3b82f6'} onChange={e => setEditingEngineer({ ...editingEngineer, color: e.target.value })} className="h-9 w-16 cursor-pointer border rounded" />
+                    <span className="text-xs text-slate-400">用於甘特圖</span>
+                  </div>
                 </div>
               </div>
               <button onClick={handleSaveEngineer} className="w-full bg-brand-600 hover:bg-brand-700 text-white font-bold py-2 rounded text-sm shadow">
@@ -439,19 +465,21 @@ function App() {
                 <table className="w-full text-sm text-left table-fixed">
                   <thead className="text-xs text-slate-500 uppercase sticky top-0 z-50 bg-white shadow-sm ring-1 ring-slate-900/5">
                     <tr>
-                      <th className="py-2 w-[30%] pl-2 bg-white border-b border-slate-100">姓名</th>
-                      <th className="py-2 w-[30%] bg-white border-b border-slate-100">密碼</th>
-                      <th className="py-2 w-[15%] bg-white border-b border-slate-100">顏色</th>
-                      <th className="py-2 w-[25%] text-right pr-2 bg-white border-b border-slate-100">操作</th>
+                      <th className="py-2 w-[25%] pl-2 bg-white border-b border-slate-100">姓名</th>
+                      <th className="py-2 w-[25%] bg-white border-b border-slate-100">部門</th>
+                      <th className="py-2 w-[25%] bg-white border-b border-slate-100">密碼</th>
+                      <th className="py-2 w-[10%] bg-white border-b border-slate-100">顏色</th>
+                      <th className="py-2 w-[15%] text-right pr-2 bg-white border-b border-slate-100">操作</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {globalEngineers.map(eng => (
                       <tr key={eng.name} className="hover:bg-slate-50">
-                        <td className="py-2 font-bold text-slate-700 w-[30%] pl-2 truncate" title={eng.name}>{eng.name}</td>
-                        <td className="py-2 font-mono text-slate-500 w-[30%] truncate">{eng.password}</td>
-                        <td className="py-2 w-[15%]"><div className="w-4 h-4 rounded-full" style={{ backgroundColor: eng.color }}></div></td>
-                        <td className="py-2 text-right w-[25%] flex justify-end gap-2 pr-2">
+                        <td className="py-2 font-bold text-slate-700 w-[25%] pl-2 truncate" title={eng.name}>{eng.name}</td>
+                        <td className="py-2 text-slate-500 w-[25%] truncate">{eng.department || '未設定'}</td>
+                        <td className="py-2 font-mono text-slate-500 w-[25%] truncate">{eng.password}</td>
+                        <td className="py-2 w-[10%]"><div className="w-4 h-4 rounded-full" style={{ backgroundColor: eng.color }}></div></td>
+                        <td className="py-2 text-right w-[15%] flex justify-end gap-2 pr-2">
                           <button onClick={() => setEditingEngineer({ ...eng })} className="text-brand-600 hover:underline text-xs">編輯</button>
                           <button onClick={() => handleDeleteEngineer(eng.name)} className="text-red-500 hover:underline text-xs">刪除</button>
                         </td>

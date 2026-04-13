@@ -3,6 +3,7 @@ export interface Engineer {
   id: string;
   name: string;
   color: string;
+  department?: string;
 }
 
 // 新增全域工程師定義 (包含密碼)
@@ -10,6 +11,7 @@ export interface GlobalEngineer {
   name: string;
   password: string;
   color: string;
+  department?: string;
 }
 
 export interface Task {
@@ -75,7 +77,7 @@ export interface LoginData {
   user: string; // The authenticated name
 }
 
-export type ViewState = 'dashboard' | 'projects' | 'wbs-editor' | 'timelog';
+export type ViewState = 'dashboard' | 'projects' | 'wbs-editor' | 'timelog' | 'project-summary';
 
 export interface BackendData {
   projects: Project[];
