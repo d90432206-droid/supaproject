@@ -37,9 +37,9 @@ export const ProjectList: React.FC<ProjectListProps> = ({ projects, loginData, o
     { category: '1.0 需求分析', titles: ['內容規劃'] },
     { category: '2.0 系統設計', titles: ['規範審查', '圖面設計', '設計審查', '承認圖說', '治具規劃'] },
     { category: '3.0 發包項目', titles: ['標準箱體', '箱體(非標準)', '設備材料'] },
-    { category: '4.0 治具整合', titles: ['治具規格', '發包治具'] },
-    { category: '5.0 硬體製作', titles: ['配線', '線路檢查', '儀器箱配線', '底板配線', '領料部品固定'] },
-    { category: '6.0 試車階段', titles: ['機台連線', '軟體調適', '硬體測試', '二次測試'] },
+    { category: '4.0 治具整合', titles: ['組裝治具', '發包治具'] },
+    { category: '5.0 硬體製作', titles: ['儀器箱配線', '底板配線', '領料部品固定', '機台連線'] },
+    { category: '6.0 試車階段', titles: ['線路檢查', '軟體調適', '硬體測試', '二次測試'] },
     { category: '7.0 品質檢驗', titles: ['儀器校驗', '設備確認'] }
   ];
 
