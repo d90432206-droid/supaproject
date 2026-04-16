@@ -19,7 +19,8 @@ export interface Task {
   title: string;
   assignee: string; // Engineer ID (matches GlobalEngineer.name or specific ID)
   startDate: string; // YYYY-MM-DD
-  duration: number; // Days
+  endDate: string; // YYYY-MM-DD (Store explicitly as requested)
+  duration: number; // Work days excluding weekends and holidays
   hours: number; // Estimated hours
   actualHours: number;
   progress: number; // 0-100

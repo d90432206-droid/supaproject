@@ -40,7 +40,7 @@ export const ProjectList: React.FC<ProjectListProps> = ({ projects, loginData, o
     { category: '4.0 治具整合', titles: ['組裝治具', '發包治具'] },
     { category: '5.0 硬體製作', titles: ['儀器箱配線', '底板配線', '領料部品固定', '機台連線'] },
     { category: '6.0 試車階段', titles: ['線路檢查', '軟體調適', '硬體測試', '二次測試'] },
-    { category: '7.0 品質檢驗', titles: ['儀器校驗', '設備確認'] }
+    { category: '7.0 品質檢驗', titles: ['儀器校驗', '設備確認', '操作說明書'] }
   ];
 
   const openCreateModal = () => {
@@ -58,6 +58,7 @@ export const ProjectList: React.FC<ProjectListProps> = ({ projects, loginData, o
                 category: template.category,
                 assignee: '', // 預設無負責人
                 startDate: today,
+                endDate: today,
                 duration: 1,
                 hours: 0,
                 actualHours: 0,
