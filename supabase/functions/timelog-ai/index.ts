@@ -152,7 +152,7 @@ async function generateAIDataReport(intent: any) {
 2. 歸納重點工作項目摘要。
 3. 提供 1-2 點專業建議。
 請多用 Emoji 與列點，格式需適合 LINE 閱讀。`;
- Linda
+
 
   return await askGemini(prompt);
 }
