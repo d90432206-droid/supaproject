@@ -10,13 +10,13 @@ const LINE_CHANNEL_SECRET = Deno.env.get('TIMELOG_LINE_SECRET') || '';
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY') || '';
 
 /**
- * 模型優先級設定 (優先嘗試最新且配額高的模型)
- * 如果第一順位忙碌 (503) 或不存在 (404)，則依序降級
+ * 模型嘗試清單 (依照最新/配額高排序)
+ * 針對 503 錯誤優化：增加重試延遲並依序流轉
  */
 const MODEL_PRIORITY = [
-  "gemini-3.1-flash-lite", // 優先使用 (0/500 RPD)
-  "gemini-3-flash",        // 次之 (0/20 RPD)
-  "gemini-2.5-flash"       // 穩定備援
+  "gemini-3.1-flash-lite", 
+  "gemini-3-flash",        
+  "gemini-2.5-flash"
 ];
 
 const corsHeaders = {
@@ -60,7 +60,7 @@ serve(async (req) => {
       return new Response(JSON.stringify({ message: 'ok' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    return new Response(JSON.stringify({ error: 'Invalid Request Intent' }), { status: 400 });
+    return new Response(JSON.stringify({ error: 'Invalid Intent' }), { status: 400 });
 
   } catch (err) {
     console.error("Critical Error:", err.message);
@@ -76,23 +76,19 @@ async function handleLineMessage(event: any) {
   const userText = event.message.text.trim();
   const replyToken = event.replyToken;
 
-  const { data: settings } = await supabase
-    .from('prj_settings')
-    .select('*')
-    .like('description', `%|%|${lineId}`);
-
+  const { data: settings } = await supabase.from('prj_settings').select('*').like('description', `%|%|${lineId}`);
   if (!settings || settings.length === 0) {
     return await lineClient.replyMessage({
       replyToken,
-      messages: [{ type: 'text', text: "❌ 您尚未獲得 AI 查詢權限。" }]
+      messages: [{ type: 'text', text: "❌ 您尚未獲得 AI 權限。" }]
     });
   }
 
   const today = new Date().toLocaleDateString('zh-TW');
-  const intentPrompt = `你是一個專業數據分析助理。請分析指令並回傳 JSON。今天：${today}
+  const intentPrompt = `分析指令回傳 JSON。今天：${today}
 A: PROJECT_QUERY | ENGINEER_QUERY | GENERAL_SUMMARY
 Format: { "action": "...", "projectId": "...", "engineerName": "...", "startDate": "...", "endDate": "..." }
-除非明確說這週，否則 startDate 留空。
+除非指定"這週"，否則 startDate 留空。
 指令：'${userText}'`;
 
   try {
@@ -100,20 +96,14 @@ Format: { "action": "...", "projectId": "...", "engineerName": "...", "startDate
     let intent;
     try {
       intent = JSON.parse(intentRaw.replace(/```json|```/g, '').trim());
-    } catch (e) { throw new Error("JSON Error"); }
-
-    if (intent.action === 'UNKNOWN') {
-      const chat = await askGemini(`使用者說：'${userText}'，請以 AI 助理身分回覆，說明你可以分析專案狀況與 Delay 風險。`);
-      return await lineClient.replyMessage({ replyToken, messages: [{ type: 'text', text: chat }] });
-    }
+    } catch (e) { throw new Error("Intent JSON Error"); }
 
     const report = await generateAIDataReport(intent);
     await lineClient.replyMessage({ replyToken, messages: [{ type: 'text', text: report }] });
 
   } catch (e) {
     console.error("Process Error:", e);
-    const msg = e.message.includes('busy') ? "⏱️ AI 忙碌中，請稍候重試。" : "⚠️ 處理異常。";
-    await lineClient.replyMessage({ replyToken, messages: [{ type: 'text', text: msg }] });
+    await lineClient.replyMessage({ replyToken, messages: [{ type: 'text', text: `⚠️ 系統繁忙或發生錯誤：${e.message}` }] });
   }
 }
 
@@ -138,16 +128,16 @@ async function generateAIDataReport(intent: any) {
      const { data: p } = await supabase.from('prj_projects').select('*').ilike('projectid', `%${projectId}%`).limit(1).single();
      if (p) {
         if (!dStart) dStart = p.startdate;
-        pContext = `專案: ${p.name} | 預算: ${p.budgethours}H`;
+        pContext = `專案: ${p.projectid} ${p.name}`;
         try {
           const det = typeof p.details_json === 'string' ? JSON.parse(p.details_json) : p.details_json;
-          if (det?.wbs) wbsInfo = "\nWBS:\n" + det.wbs.map((w: any) => `- ${w.id} ${w.taskName}: ${w.budgetHours}H (${w.startDate}~${w.endDate})`).join('\n');
+          if (det?.wbs) wbsInfo = "\n【WBS 設定】:\n" + det.wbs.slice(0, 15).map((w: any) => `- ${w.id} ${w.taskName}: ${w.budgetHours}H`).join('\n');
         } catch (e) {}
      }
   }
 
   if (!dStart) {
-    const t = new Date(); t.setMonth(t.getMonth() - 12); dStart = t.toISOString().split('T')[0];
+    const t = new Date(); t.setMonth(t.getMonth() - 1); dStart = t.toISOString().split('T')[0];
   }
 
   let query = supabase.from('prj_logs').select('*').gte('date', dStart).lte('date', dEnd);
@@ -155,81 +145,76 @@ async function generateAIDataReport(intent: any) {
   else if (engineerName) query = query.ilike('engineer', `%${engineerName}%`);
   
   const { data: logs } = await query;
-  if (!logs || logs.length === 0) return `🔍 ${dStart}~${dEnd} 無紀錄。`;
+  if (!logs || logs.length === 0) return `🔍 ${dStart}~${dEnd} 無工時紀錄。`;
 
-  const { data: allP } = await supabase.from('prj_projects').select('projectid, name');
-  const pMap = allP?.reduce((acc: any, p: any) => { acc[p.projectid] = p.name; return acc; }, {}) || {};
+  const ds = logs.slice(0, 200).map(l => `[${l.date}] ${l.engineer} | ${l.projectid} | ${l.hours}H | ${l.note || l.content}`).join('\n');
 
-  const ds = logs.map(l => `[${l.date}] ${l.engineer} | ${pMap[l.projectid] || l.projectid} | ${l.taskid||''} | ${l.hours}H | ${l.note || l.content}`).join('\n');
-
-  const prompt = `你是一個項目控制專家。請分析數據並產出 Delay 預警報告。今日: ${new Date().toLocaleDateString()}
+  const prompt = `項目助手報告。今日: ${new Date().toLocaleDateString()}
 目標: ${pContext || engineerName} | 區間: ${dStart}~${dEnd}
 ${wbsInfo}
 日誌:
 ${ds}
-要求:
-1.開場 2.偏差分析(比對 WBS 與實際) 3.總工時與佔比(%) 4.風險建議 5.LINE 優化排版。`;
+請分析 Delay 平衡進度，標註超預算風險，精確計算佔比(%)。`;
 
   return await askGemini(prompt);
 }
 
-// 改進的 askGemini：具備多模型自動降級與忙碌重試功能
+/**
+ * 改進的 askGemini：
+ * 針對 503 錯誤增加延遲重試，並在重試無效時強制切換下一個模型。
+ */
 async function askGemini(prompt: string, jsonOnly = false) {
-  if (!GEMINI_API_KEY) return "❌ No Key";
+  if (!GEMINI_API_KEY) return "❌ No API Key";
   
-  // 依序嘗試所有可用模型
+  const errors = [];
+  
   for (const modelId of MODEL_PRIORITY) {
     try {
-      console.log(`Trying model: ${modelId}`);
-      const res = await callGeminiAPI(modelId, prompt, jsonOnly);
-      if (res) return res;
-    } catch (e) {
-      console.warn(`Model ${modelId} failed: ${e.message}. Moving to next...`);
-      continue; // 嘗試下一個模型
-    }
-  }
-  
-  throw new Error("All models failed or busy.");
-}
+      console.log(`[AI] Requesting ${modelId}...`);
+      let attempts = 0;
+      
+      while (attempts < 2) {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${GEMINI_API_KEY}`;
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+              temperature: 0.1,
+              ...(jsonOnly ? { responseMimeType: "application/json" } : {})
+            }
+          })
+        });
 
-async function callGeminiAPI(model: string, prompt: string, jsonOnly: boolean) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
-  
-  let attempts = 0;
-  while (attempts < 2) {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.1, 
-          maxOutputTokens: 2048,
-          ...(jsonOnly ? { responseMimeType: "application/json" } : {})
+        const data = await response.json();
+        
+        if (response.ok) {
+          const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (text) return text;
+          throw new Error("Empty internal response");
         }
-      })
-    });
 
-    const data = await response.json();
-    
-    // 成功回傳
-    if (response.ok) {
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (text) return text;
-      throw new Error("Empty Response");
+        // 如果遇到 503 (繁忙) 或 429 (頻率限制)，等待較長時間後重試一次
+        if (response.status === 503 || response.status === 429) {
+          attempts++;
+          console.warn(`[AI] ${modelId} is busy (503/429), retrying in 3s...`);
+          await new Promise(r => setTimeout(r, 3000));
+          continue;
+        }
+
+        // 其他錯誤 (如 404, 400)，直接放棄當前模型嘗試下一個
+        throw new Error(`API ${response.status}: ${data.error?.message || 'unknown'}`);
+      }
+      
+      throw new Error(`${modelId} busy after retries`);
+      
+    } catch (e) {
+      console.error(`[AI] Model ${modelId} failed: ${e.message}`);
+      errors.push(`${modelId}: ${e.message}`);
+      continue; // 嘗試 MODEL_PRIORITY 中的下一個模型
     }
-
-    // 處理忙碌 (503/429) -> 重試
-    if (response.status === 503 || response.status === 429) {
-      console.warn(`Model ${model} busy, retry ${attempts + 1}`);
-      await new Promise(r => setTimeout(r, 1500));
-      attempts++;
-      continue;
-    }
-
-    // 處理找不到模型 (404) 或其他錯誤 -> 直接換下一個模型
-    throw new Error(`API error ${response.status}: ${data.error?.message || 'unknown'}`);
   }
   
-  throw new Error(`Model ${model} still busy after retries`);
+  throw new Error(`所有模型均不可用或繁忙。錯誤紀錄：${errors.join('; ')}`);
 }
