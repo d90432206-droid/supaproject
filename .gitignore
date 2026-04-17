@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Custom bot and temporary files
+.env.bot
+output.txt
+scratch/

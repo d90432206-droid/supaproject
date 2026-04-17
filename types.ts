@@ -12,6 +12,7 @@ export interface GlobalEngineer {
   password: string;
   color: string;
   department?: string;
+  lineId?: string; // 新增：LINE 使用者 ID
 }
 
 export interface Task {
