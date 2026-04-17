@@ -93,15 +93,17 @@ async function handleLineMessage(event: any) {
 今天日期：${today}
 
 可用 Action 類型：
-- "PROJECT_QUERY": 查詢特定專案工時 (除非強調這週，否則預設看該專案全週期)
+- "PROJECT_QUERY": 查詢特定專案工時與 WBS 進度差異 (除非強調看這週/最近，否則預設看全週期)
 - "ENGINEER_QUERY": 查詢人員績效與工時
-- "GENERAL_SUMMARY": 總體摘要報告
+- "GENERAL_SUMMARY": 總體摘要報告 (預設看最近一個月)
 - "UNKNOWN": 其他聊天內容
 
 JSON 格式要求：
 { "action": "...", "projectId": "...", "engineerName": "...", "startDate": "YYYY-MM-DD", "endDate": "YYYY-MM-DD" }
 
-使用者指令：'${userText}'`;
+※ 重要指令：
+1.除非使用者明確說「這週」、「本週」或給出具體日期，否則 "startDate" 請保留為空。
+2.若是查詢單一專案進度，優先判定為 PROJECT_QUERY。`;
 
   try {
     const intentRaw = await askGemini(intentPrompt, true);
@@ -151,11 +153,32 @@ async function generateAIDataReport(intent: any) {
   
   let dStart = startDate;
   let dEnd = endDate || new Date().toISOString().split('T')[0];
+  let wbsInfo = "";
+  let projectContext = "";
 
-  // 抓取專案開始日期 (針對專案查詢)
-  if (!dStart && action === 'PROJECT_QUERY' && projectId) {
-    const { data } = await supabase.from('prj_projects').select('startdate').ilike('projectid', `%${projectId}%`).limit(1).single();
-    if (data?.startdate) dStart = data.startdate;
+  // 1. 抓取更豐富的專案上下文 (WBS, 預算, 期限)
+  if (projectId) {
+     const { data: p } = await supabase
+       .from('prj_projects')
+       .select('projectid, name, startdate, enddate, budgethours, details_json')
+       .ilike('projectid', `%${projectId}%`)
+       .limit(1)
+       .single();
+     
+     if (p) {
+        if (!dStart) dStart = p.startdate; // 優先使用專案開始日
+        projectContext = `專案名稱: ${p.name} | 預計起迄: ${p.startdate} ~ ${p.enddate || '未定'} | 總預算工時: ${p.budgethours}H`;
+        
+        // 提取 WBS 資訊
+        try {
+          const details = typeof p.details_json === 'string' ? JSON.parse(p.details_json) : p.details_json;
+          if (details?.wbs && Array.isArray(details.wbs)) {
+            wbsInfo = "\n【WBS 任務預算與進度設定】:\n" + details.wbs.map((w: any) => 
+              `- [${w.id}] ${w.taskName}: 預算 ${w.budgetHours}H | 預計 ${w.startDate} ~ ${w.endDate}`
+            ).join('\n');
+          }
+        } catch (e) { console.warn("WBS Parse Error"); }
+     }
   }
 
   // 預設日期回退
@@ -165,34 +188,45 @@ async function generateAIDataReport(intent: any) {
     dStart = temp.toISOString().split('T')[0];
   }
 
-  // 抓取日誌
+  // 2. 抓取工時日誌
   let query = supabase.from('prj_logs').select('*').gte('date', dStart).lte('date', dEnd);
-  if (action === 'PROJECT_QUERY' && projectId) query = query.ilike('projectid', `%${projectId}%`);
-  else if (action === 'ENGINEER_QUERY' && engineerName) query = query.ilike('engineer', `%${engineerName}%`);
+  if (projectId) query = query.ilike('projectid', `%${projectId}%`);
+  else if (engineerName) query = query.ilike('engineer', `%${engineerName}%`);
   
   const { data: logs } = await query;
   if (!logs || logs.length === 0) return `🔍 找不到 ${dStart} ~ ${dEnd} 的工時記錄。`;
 
-  const { data: projects } = await supabase.from('prj_projects').select('projectid, name');
-  const projectMap = projects?.reduce((acc: any, p: any) => { acc[p.projectid] = p.name; return acc; }, {}) || {};
+  // 3. 抓取所有專案名稱對照 (用於顯示)
+  const { data: allProjects } = await supabase.from('prj_projects').select('projectid, name');
+  const projectMap = allProjects?.reduce((acc: any, p: any) => { acc[p.projectid] = p.name; return acc; }, {}) || {};
 
-  const dataString = logs.map(l => `[${l.date}] ${l.engineer} | ${projectMap[l.projectid] || l.projectid} | ${l.hours}H | ${l.note || l.content}`).join('\n');
+  // 4. 格式化日誌數據
+  const dataString = logs.map(l => 
+    `[${l.date}] ${l.engineer} | ${projectMap[l.projectid] || l.projectid} | ${l.taskid ? '任務:'+l.taskid : ''} | ${l.hours}H | ${l.note || l.content}`
+  ).join('\n');
 
-  const prompt = `你是一個資深的工時數據分析專家 (使用 Gemini 3.1 Flash Lite)。
-請針對以下數據產出專業報告。
+  // 5. 高級分析 Prompt (聚焦 Delay 偵測)
+  const prompt = `你是一個資深的項目控制 (Project Control) 專家與數據分析師。
+請根據以下數據，產出專業的「進度與偏差分析報告」。
 
-【目標】 ${engineerName || projectId || '全體'} | 【區間】 ${dStart} ~ ${dEnd}
-【數據】
+【查詢目標】 ${projectContext || engineerName || '全公司'}
+【資料時間】 ${dStart} ~ ${dEnd} (今日日期: ${new Date().toLocaleDateString()})
+${wbsInfo}
+
+【工時日誌明細】
 ${dataString}
 
-【報表要求】
-1. 開場：你好，我是您的專案 AI 助理。
-2. 數據分析：總工時、**各項任務/專案佔比分析 (%)**。
-3. 關鍵洞察：找出資源分配規律或加班異常。
-4. 專業建議：下步行動指南。
-5. 排版：針對手機 LINE 優化，使用美觀 Emoji 與分隔線。
+【專業分析要求】
+1. **開場白**：你好，我是專案 AI 助理。
+2. **偏差分析 (Delay Detection)**：
+   - 請比對「WBS 任務預算」與「實際累計工時」。
+   - 如果某項任務的實際工時已接近或超過預算，請標註為 **[超支風險]**。
+   - 如果今天日期已接近或超過 WBS 的結束日期但仍有大量工時產生，請標註為 **[進度落後 (Delay)]**。
+3. **數據統計**：計算總工時及各任務佔比 (%)。
+4. **重點摘要**：本區間的主要工作成果。
+5. **行動建議**：針對 Delayed 或風險項目提出具體管理建議。
 
-請精確計算百分比。`;
+請使用繁體中文，排版需在手機 LINE 上美觀且易讀（多用列點與 Emoji）。計算需精確。`;
 
   return await askGemini(prompt);
 }
