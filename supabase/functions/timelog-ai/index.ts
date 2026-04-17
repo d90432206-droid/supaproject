@@ -9,8 +9,13 @@ const LINE_CHANNEL_ACCESS_TOKEN = Deno.env.get('TIMELOG_LINE_TOKEN') || '';
 const LINE_CHANNEL_SECRET = Deno.env.get('TIMELOG_LINE_SECRET') || '';
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY') || '';
 
-// 優先順序：Gemini 1.5 Flash (快速穩定且配額充足) 
-const GEMINI_MODEL = "gemini-1.5-flash"; 
+/**
+ * 根據使用者截圖與指示：
+ * 優先使用 Gemini 3.1 Flash Lite (配額最高，最穩定)
+ * 備用方案為 Gemini 3 Flash 或 Gemini 2.5 Flash Lite
+ * 完全移除所有 1.5 版本
+ */
+const GEMINI_MODEL = "gemini-3.1-flash-lite"; 
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -33,7 +38,6 @@ serve(async (req) => {
     const body = await req.json();
     console.log("Receiving Request:", JSON.stringify(body));
 
-    // 1. 手動觸發分析 (用於前端 API 呼叫)
     if (body.action === 'analyze_data' || body.action === 'generate_report_v2') {
       const report = await generateAIDataReport(body);
       return new Response(JSON.stringify({ report }), { 
@@ -41,12 +45,10 @@ serve(async (req) => {
       });
     }
 
-    // 2. Cron 排程或是 LINE 推播觸發
     if (body.type === 'cron_trigger' || body.action === 'generate_report') {
       return await handleWeeklyReport();
     }
 
-    // 3. 處理 LINE Webhook 事件
     if (body.events) {
       for (const event of body.events) {
         if (event.type === 'message' && event.message.type === 'text') {
@@ -72,7 +74,6 @@ async function handleLineMessage(event: any) {
   const userText = event.message.text.trim();
   const replyToken = event.replyToken;
 
-  // 1. 驗證權限 (查詢 prj_settings 中帶有此 LINE ID 的管理者)
   const { data: settings } = await supabase
     .from('prj_settings')
     .select('*')
@@ -81,65 +82,51 @@ async function handleLineMessage(event: any) {
   if (!settings || settings.length === 0) {
     return await lineClient.replyMessage({
       replyToken,
-      messages: [{ type: 'text', text: "❌ 您尚未獲得查詢權限。請在管理台設定您的 LINE ID 並聯繫系統管理員。" }]
+      messages: [{ type: 'text', text: "❌ 您尚未獲得 AI 查詢權限。請在管理後台設定您的 LINE ID。" }]
     });
   }
 
   const today = new Date().toLocaleDateString('zh-TW');
   
-  // 2. 意圖分析 (AI 解析使用者想要看什麼)
-  const intentPrompt = `你是一個專業的資深助理意圖分析員。請分析使用者指令，回傳 JSON。
+  const intentPrompt = `你是一個專業的資深分析助理意圖解析員。
+請解析使用者指令並回傳 JSON。
 今天日期：${today}
 
 可用 Action 類型：
-- "PROJECT_QUERY": 查詢特定專案工時 (除非使用者強調最近、這週，否則預設為該專案完整週期)
-- "ENGINEER_QUERY": 查詢特定人員工時
-- "GENERAL_SUMMARY": 查詢全公司/多個專案總體進度
-- "UNKNOWN": 無法理解或聊天
+- "PROJECT_QUERY": 查詢特定專案工時 (除非強調這週，否則預設看該專案全週期)
+- "ENGINEER_QUERY": 查詢人員績效與工時
+- "GENERAL_SUMMARY": 總體摘要報告
+- "UNKNOWN": 其他聊天內容
 
-JSON 格式：
-{ 
-  "action": "...", 
-  "projectId": "專案代號(若有)", 
-  "engineerName": "人員姓名(若有)", 
-  "startDate": "YYYY-MM-DD", 
-  "endDate": "YYYY-MM-DD",
-  "reasoning": "分析原因" 
-}
+JSON 格式要求：
+{ "action": "...", "projectId": "...", "engineerName": "...", "startDate": "YYYY-MM-DD", "endDate": "YYYY-MM-DD" }
 
 使用者指令：'${userText}'`;
 
   try {
-    console.log("Gemini Intent Parsing...");
     const intentRaw = await askGemini(intentPrompt, true);
     let intent;
     try {
       intent = JSON.parse(intentRaw.replace(/```json|```/g, '').trim());
     } catch (e) {
-      console.error("JSON Parse Error:", intentRaw);
+      console.error("Parse Error:", intentRaw);
       throw new Error("意圖解析 JSON 格式錯誤");
     }
 
     if (intent.action === 'UNKNOWN') {
-      const chat = await askGemini(`使用者對你說：'${userText}'，請以一位專業的「專案 AI 管理助理」身分，用繁體中文簡短回覆他，說明你可以幫他查詢完整專案週期工時、人員績效或產出週報。`);
+      const chat = await askGemini(`使用者說：'${userText}'，請以「專案管理 AI 助手」身分繁體中文回覆，說明你可以幫他用最新的 Gemini 3.1 技術分析工時。`);
       return await lineClient.replyMessage({ replyToken, messages: [{ type: 'text', text: chat }] });
     }
 
-    // 3. 抓取數據並產出報表
-    console.log("Generating Enhanced Data Report...");
     const report = await generateAIDataReport(intent);
     await lineClient.replyMessage({ replyToken, messages: [{ type: 'text', text: report }] });
 
   } catch (e) {
     console.error("Process Error:", e);
-    const errorMsg = e.message.includes('503') || e.message.includes('忙碌')
-      ? "⏱️ 目前 AI 服務端忙碌中，請稍候 30 秒後再次嘗試。" 
-      : "⚠️ 處理中發生錯誤，請調整提問方式或聯繫管理員。";
-      
-    await lineClient.replyMessage({ 
-      replyToken, 
-      messages: [{ type: 'text', text: errorMsg }] 
-    });
+    const msg = e.message.includes('503') || e.message.includes('busy')
+      ? "⏱️ 目前 Gemini 3.1 服務負載較高，請於 30 秒後重新發送請求。"
+      : "⚠️ 系統處理異常，請聯繫開發人員。";
+    await lineClient.replyMessage({ replyToken, messages: [{ type: 'text', text: msg }] });
   }
 }
 
@@ -152,11 +139,11 @@ async function handleWeeklyReport() {
     try {
       await lineClient.pushMessage({ 
         to: id, 
-        messages: [{ type: 'text', text: `📊 【系統自動推播】本週工時進度摘要：\n\n${summary}` }] 
+        messages: [{ type: 'text', text: `📊 【AI 自動導覽】本週數據總覽：\n\n${summary}` }] 
       });
-    } catch (e) { console.error("Push failed:", id, e.message); }
+    } catch (e) { console.error("Push Error:", e.message); }
   }
-  return new Response(JSON.stringify({ message: "Sent" }), { headers: { 'Content-Type': 'application/json' } });
+  return new Response("ok");
 }
 
 async function generateAIDataReport(intent: any) {
@@ -165,90 +152,66 @@ async function generateAIDataReport(intent: any) {
   let dStart = startDate;
   let dEnd = endDate || new Date().toISOString().split('T')[0];
 
-  // 1. 特殊邏輯：若沒給開始日期且是查專案，嘗試抓該專案的開始日
+  // 抓取專案開始日期 (針對專案查詢)
   if (!dStart && action === 'PROJECT_QUERY' && projectId) {
-    const { data: pData } = await supabase
-      .from('prj_projects')
-      .select('startdate')
-      .ilike('projectid', `%${projectId}%`)
-      .limit(1)
-      .single();
-    
-    if (pData?.startdate) {
-      dStart = pData.startdate;
-      console.log(`Using project start date: ${dStart}`);
-    }
+    const { data } = await supabase.from('prj_projects').select('startdate').ilike('projectid', `%${projectId}%`).limit(1).single();
+    if (data?.startdate) dStart = data.startdate;
   }
 
-  // 預設日期回退 (最近一年，避免數據太少或沒抓到專案日期)
+  // 預設日期回退
   if (!dStart) {
     const temp = new Date();
-    temp.setMonth(temp.getMonth() - 12); 
+    temp.setMonth(temp.getMonth() - 12);
     dStart = temp.toISOString().split('T')[0];
   }
 
-  // 2. 從 SQL 抓取 Logs
+  // 抓取日誌
   let query = supabase.from('prj_logs').select('*').gte('date', dStart).lte('date', dEnd);
   if (action === 'PROJECT_QUERY' && projectId) query = query.ilike('projectid', `%${projectId}%`);
   else if (action === 'ENGINEER_QUERY' && engineerName) query = query.ilike('engineer', `%${engineerName}%`);
-
+  
   const { data: logs } = await query;
+  if (!logs || logs.length === 0) return `🔍 找不到 ${dStart} ~ ${dEnd} 的工時記錄。`;
 
-  if (!logs || logs.length === 0) {
-    return `🔍 在 ${dStart} ~ ${dEnd} 期間，針對「${projectId || engineerName || '全公司'}」查無任何工時記錄。`;
-  }
-
-  // 3. 獲取專案名稱對照
   const { data: projects } = await supabase.from('prj_projects').select('projectid, name');
   const projectMap = projects?.reduce((acc: any, p: any) => { acc[p.projectid] = p.name; return acc; }, {}) || {};
 
-  // 4. 格式化數據清單
-  const dataString = logs.map(l => 
-    `[${l.date}] ${l.engineer} | ${projectMap[l.projectid] || l.projectid} | ${l.hours}H | ${l.note || l.content}`
-  ).join('\n');
+  const dataString = logs.map(l => `[${l.date}] ${l.engineer} | ${projectMap[l.projectid] || l.projectid} | ${l.hours}H | ${l.note || l.content}`).join('\n');
 
-  // 5. 定義專業 Prompt (加強百分比分析)
-  const prompt = `你是一個資深的工時數據分析專家。
-請分析以下工時數據，產出一份高級、專業且富有洞察力的中文報告。
+  const prompt = `你是一個資深的工時數據分析專家 (使用 Gemini 3.1 Flash Lite)。
+請針對以下數據產出專業報告。
 
-【目標對象】 ${engineerName || projectId || '全公司'}
-【查詢區間】 ${dStart} ~ ${dEnd}
-
-【數據清單 (日期 | 成員 | 專案 | 工時 | 內容)】
+【目標】 ${engineerName || projectId || '全體'} | 【區間】 ${dStart} ~ ${dEnd}
+【數據】
 ${dataString}
 
-【報告格式要求】
-1. 開場白：需包含「你好，我是專案 AI 助理」。
-2. 數據深度統計：
-   - 總累計工時。
-   - 【核心需求】請計算各個不同任務/專案/成員的「佔比狀況 (%)」。
-   - 若數據包含「任務分工」，請條列出各任務的百分比分布。
-3. 關鍵洞察：基於數據找出本區間最花時間的項目、加班狀況或資源集中度。
-4. 專業經理建議：提供 1-3 點改善、風險預警或下階段重點建議。
-5. 視覺化設計：使用 Emoji、分隔線與適當縮排，確保在手機版 LINE 排版美觀。
+【報表要求】
+1. 開場：你好，我是您的專案 AI 助理。
+2. 數據分析：總工時、**各項任務/專案佔比分析 (%)**。
+3. 關鍵洞察：找出資源分配規律或加班異常。
+4. 專業建議：下步行動指南。
+5. 排版：針對手機 LINE 優化，使用美觀 Emoji 與分隔線。
 
-請務必精確計算百分比，語氣專業冷靜但溫暖。`;
+請精確計算百分比。`;
 
   return await askGemini(prompt);
 }
 
 async function askGemini(prompt: string, jsonOnly = false) {
-  if (!GEMINI_API_KEY) return "❌ 系統錯誤：Missing GEMINI_API_KEY";
+  if (!GEMINI_API_KEY) return "❌ 缺少 GEMINI_API_KEY";
   
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
   
   try {
     let attempt = 0;
-    const maxAttempts = 2;
-    
-    while (attempt < maxAttempts) {
+    while (attempt < 2) {
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
-            temperature: 0.2, 
+            temperature: 0.1, 
             topP: 0.95,
             topK: 40,
             maxOutputTokens: 2048,
@@ -258,26 +221,39 @@ async function askGemini(prompt: string, jsonOnly = false) {
       });
 
       const data = await response.json();
-      
-      if (response.ok) {
-        return data.candidates?.[0]?.content?.parts?.[0]?.text || "⚠️ AI 暫時無法分析。";
-      }
+      if (response.ok) return data.candidates?.[0]?.content?.parts?.[0]?.text || "⚠️ 無法產出內容";
 
       if (response.status === 503 || response.status === 429) {
-        console.warn(`Gemini Busy (${response.status}), retrying in 2s... (Attempt ${attempt + 1})`);
-        await new Promise(r => setTimeout(r, 2000));
+        console.warn(`Retry due to ${response.status}...`);
+        await new Promise(r => setTimeout(r, 1500));
         attempt++;
         continue;
       }
 
-      console.error("Gemini API Error:", JSON.stringify(data));
-      throw new Error(`AI 服務目前異常 (${response.status})`);
-    }
+      // 如果 3.1 報錯，嘗試降級到使用者建議的 2.5 flash lite
+      if (response.status === 404 && GEMINI_MODEL === "gemini-3.1-flash-lite") {
+          return await askGeminiSpecific(prompt, jsonOnly, "gemini-2.5-flash-lite");
+      }
 
-    throw new Error("AI 服務忙碌中，請稍候再試。");
-    
-  } catch (err) {
-    console.error("Fetch Exception:", err);
-    throw err;
+      throw new Error(`Gemini Error ${response.status}`);
+    }
+    throw new Error("Busy");
+  } catch (e) {
+    console.error(e);
+    throw e;
   }
+}
+
+async function askGeminiSpecific(prompt: string, jsonOnly: boolean, model: string) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: jsonOnly ? { responseMimeType: "application/json" } : {}
+      })
+    });
+    const data = await response.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || "⚠️ 降級分析失敗";
 }
