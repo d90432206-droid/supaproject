@@ -9,8 +9,8 @@ const LINE_CHANNEL_ACCESS_TOKEN = Deno.env.get('TIMELOG_LINE_TOKEN') || '';
 const LINE_CHANNEL_SECRET = Deno.env.get('TIMELOG_LINE_SECRET') || '';
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY') || '';
 
-// 優先順序：Gemini 1.5 Pro (針對複雜分析) > Pro (穩定) > Flash (快速)
-const GEMINI_MODEL = "gemini-1.5-pro"; 
+// 優先順序：Gemini 1.5 Flash (快速穩定且配額充足) 
+const GEMINI_MODEL = "gemini-1.5-flash"; 
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -88,14 +88,14 @@ async function handleLineMessage(event: any) {
   const today = new Date().toLocaleDateString('zh-TW');
   
   // 2. 意圖分析 (AI 解析使用者想要看什麼)
-  const intentPrompt = `你是一個專業的資深助理意圖分析員。請分析使用者輸入的指令，並回傳格式嚴格的 JSON。
-今天日期是：${today}
+  const intentPrompt = `你是一個專業的資深助理意圖分析員。請分析使用者指令，回傳 JSON。
+今天日期：${today}
 
 可用 Action 類型：
-- "PROJECT_QUERY": 查詢特定專案的工時
-- "ENGINEER_QUERY": 查詢特定人員的工時
-- "GENERAL_SUMMARY": 查詢全公司或多個專案的總體進度
-- "UNKNOWN": 無法理解或純粹聊天
+- "PROJECT_QUERY": 查詢特定專案工時 (除非使用者強調最近、這週，否則預設為該專案完整週期)
+- "ENGINEER_QUERY": 查詢特定人員工時
+- "GENERAL_SUMMARY": 查詢全公司/多個專案總體進度
+- "UNKNOWN": 無法理解或聊天
 
 JSON 格式：
 { 
@@ -112,10 +112,16 @@ JSON 格式：
   try {
     console.log("Gemini Intent Parsing...");
     const intentRaw = await askGemini(intentPrompt, true);
-    const intent = JSON.parse(intentRaw.replace(/```json|```/g, '').trim());
+    let intent;
+    try {
+      intent = JSON.parse(intentRaw.replace(/```json|```/g, '').trim());
+    } catch (e) {
+      console.error("JSON Parse Error:", intentRaw);
+      throw new Error("意圖解析 JSON 格式錯誤");
+    }
 
     if (intent.action === 'UNKNOWN') {
-      const chat = await askGemini(`使用者對你說：'${userText}'，請以一位貼心且專業的專案管家身分，用繁體中文簡短回覆他，說明你可以幫他查詢專案工時或產出週報。`);
+      const chat = await askGemini(`使用者對你說：'${userText}'，請以一位專業的「專案 AI 管理助理」身分，用繁體中文簡短回覆他，說明你可以幫他查詢完整專案週期工時、人員績效或產出週報。`);
       return await lineClient.replyMessage({ replyToken, messages: [{ type: 'text', text: chat }] });
     }
 
@@ -126,9 +132,13 @@ JSON 格式：
 
   } catch (e) {
     console.error("Process Error:", e);
+    const errorMsg = e.message.includes('503') || e.message.includes('忙碌')
+      ? "⏱️ 目前 AI 服務端忙碌中，請稍候 30 秒後再次嘗試。" 
+      : "⚠️ 處理中發生錯誤，請調整提問方式或聯繫管理員。";
+      
     await lineClient.replyMessage({ 
       replyToken, 
-      messages: [{ type: 'text', text: "⚠️ 處理中發生技術錯誤，請稍後再試，或聯繫系統架構師。" }] 
+      messages: [{ type: 'text', text: errorMsg }] 
     });
   }
 }
@@ -152,48 +162,72 @@ async function handleWeeklyReport() {
 async function generateAIDataReport(intent: any) {
   const { action, projectId, engineerName, startDate, endDate } = intent;
   
-  // 設定時間區間
   let dStart = startDate;
   let dEnd = endDate || new Date().toISOString().split('T')[0];
+
+  // 1. 特殊邏輯：若沒給開始日期且是查專案，嘗試抓該專案的開始日
+  if (!dStart && action === 'PROJECT_QUERY' && projectId) {
+    const { data: pData } = await supabase
+      .from('prj_projects')
+      .select('startdate')
+      .ilike('projectid', `%${projectId}%`)
+      .limit(1)
+      .single();
+    
+    if (pData?.startdate) {
+      dStart = pData.startdate;
+      console.log(`Using project start date: ${dStart}`);
+    }
+  }
+
+  // 預設日期回退 (最近一年，避免數據太少或沒抓到專案日期)
   if (!dStart) {
     const temp = new Date();
-    temp.setDate(temp.getDate() - 7);
+    temp.setMonth(temp.getMonth() - 12); 
     dStart = temp.toISOString().split('T')[0];
   }
 
-  // 1. 從物理數據庫抓取
+  // 2. 從 SQL 抓取 Logs
   let query = supabase.from('prj_logs').select('*').gte('date', dStart).lte('date', dEnd);
   if (action === 'PROJECT_QUERY' && projectId) query = query.ilike('projectid', `%${projectId}%`);
+  else if (action === 'ENGINEER_QUERY' && engineerName) query = query.ilike('engineer', `%${engineerName}%`);
+
   const { data: logs } = await query;
 
   if (!logs || logs.length === 0) {
-    return `🔍 在 ${dStart} ~ ${dEnd} 期間，針對「${projectId || engineerName || '全公司'}」查無相關工時記錄。`;
+    return `🔍 在 ${dStart} ~ ${dEnd} 期間，針對「${projectId || engineerName || '全公司'}」查無任何工時記錄。`;
   }
 
-  // 2. 獲取專案名稱對照
+  // 3. 獲取專案名稱對照
   const { data: projects } = await supabase.from('prj_projects').select('projectid, name');
   const projectMap = projects?.reduce((acc: any, p: any) => { acc[p.projectid] = p.name; return acc; }, {}) || {};
 
-  // 3. 格式化為 AI 友好的清單（減少 JSON 冗餘）
+  // 4. 格式化數據清單
   const dataString = logs.map(l => 
     `[${l.date}] ${l.engineer} | ${projectMap[l.projectid] || l.projectid} | ${l.hours}H | ${l.note || l.content}`
   ).join('\n');
 
-  // 4. 定義專業 Prompt
-  const prompt = `你是一個專業的高級專案經理與工時分析專家。
-請根據以下提供的工時原始數據，為「${engineerName || projectId || '全公司'}」產出一份結構清晰、富有見地的專業報表。
+  // 5. 定義專業 Prompt (加強百分比分析)
+  const prompt = `你是一個資深的工時數據分析專家。
+請分析以下工時數據，產出一份高級、專業且富有洞察力的中文報告。
 
-【原始數據 (日期 | 成員 | 專案 | 工時 | 內容)】
+【目標對象】 ${engineerName || projectId || '全公司'}
+【查詢區間】 ${dStart} ~ ${dEnd}
+
+【數據清單 (日期 | 成員 | 專案 | 工時 | 內容)】
 ${dataString}
 
-【報表要求】
-1. 開場白：需包含「你好，我是專案 AI 助理」，並根據查詢對象(人員或專案)調整語氣。
-2. 數據統計：精確計算總工時，若有多個專案/多位成員，請按佔比進行排序與百分比分析。
-3. 關鍵洞察：歸納本段期間的主要工作進展與重點事項。
-4. 專業建議：提供 1-3 點關於進度控制、資源分配或異常預警的建議。
-5. 視覺化：使用適量的 Emoji、分隔線與列點，確保內容在 LINE 手機畫面上易於閱讀且排版美觀。
+【報告格式要求】
+1. 開場白：需包含「你好，我是專案 AI 助理」。
+2. 數據深度統計：
+   - 總累計工時。
+   - 【核心需求】請計算各個不同任務/專案/成員的「佔比狀況 (%)」。
+   - 若數據包含「任務分工」，請條列出各任務的百分比分布。
+3. 關鍵洞察：基於數據找出本區間最花時間的項目、加班狀況或資源集中度。
+4. 專業經理建議：提供 1-3 點改善、風險預警或下階段重點建議。
+5. 視覺化設計：使用 Emoji、分隔線與適當縮排，確保在手機版 LINE 排版美觀。
 
-請使用繁體中文，語氣保持客觀、專業、溫暖。`;
+請務必精確計算百分比，語氣專業冷靜但溫暖。`;
 
   return await askGemini(prompt);
 }
@@ -201,56 +235,49 @@ ${dataString}
 async function askGemini(prompt: string, jsonOnly = false) {
   if (!GEMINI_API_KEY) return "❌ 系統錯誤：Missing GEMINI_API_KEY";
   
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+  
   try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+    let attempt = 0;
+    const maxAttempts = 2;
     
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.7,
-          topP: 0.95,
-          topK: 40,
-          maxOutputTokens: 2048,
-          ...(jsonOnly ? { responseMimeType: "application/json" } : {})
-        }
-      })
-    });
+    while (attempt < maxAttempts) {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.2, 
+            topP: 0.95,
+            topK: 40,
+            maxOutputTokens: 2048,
+            ...(jsonOnly ? { responseMimeType: "application/json" } : {})
+          }
+        })
+      });
 
-    const data = await response.json();
-    
-    if (!response.ok) {
-      console.error("Gemini API Error:", JSON.stringify(data));
-      // 如果是模型不存在錯誤，嘗試降級到 Flash
-      if (response.status === 404 && GEMINI_MODEL !== "gemini-1.5-flash") {
-         console.warn("Model not found, falling back to gemini-1.5-flash...");
-         return await askGeminiFallback(prompt, jsonOnly, "gemini-1.5-flash");
+      const data = await response.json();
+      
+      if (response.ok) {
+        return data.candidates?.[0]?.content?.parts?.[0]?.text || "⚠️ AI 暫時無法分析。";
       }
-      return `❌ AI 服務目前無法回應 (${response.status}): ${data.error?.message || '未知錯誤'}`;
+
+      if (response.status === 503 || response.status === 429) {
+        console.warn(`Gemini Busy (${response.status}), retrying in 2s... (Attempt ${attempt + 1})`);
+        await new Promise(r => setTimeout(r, 2000));
+        attempt++;
+        continue;
+      }
+
+      console.error("Gemini API Error:", JSON.stringify(data));
+      throw new Error(`AI 服務目前異常 (${response.status})`);
     }
 
-    const result = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    return result || "⚠️ AI 暫時無法分析此數據，請稍後再試。";
+    throw new Error("AI 服務忙碌中，請稍候再試。");
     
   } catch (err) {
     console.error("Fetch Exception:", err);
-    return `❌ 連線失敗: ${err.message}`;
+    throw err;
   }
-}
-
-// 降級處理函數
-async function askGeminiFallback(prompt: string, jsonOnly: boolean, model: string) {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: jsonOnly ? { responseMimeType: "application/json" } : {}
-      })
-    });
-    const data = await response.json();
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || "⚠️ 降級分析失敗";
 }
