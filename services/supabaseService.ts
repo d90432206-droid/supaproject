@@ -315,17 +315,21 @@ export const SupabaseService = {
     }
   },
 
-  // 6. 刪除單一日報
-  deleteLog: async (logId: number): Promise<void> => {
+  // 7. 呼叫 AI 邊際運算函數進行分析
+  generateAIAnalysis: async (params: { action: string, projectId?: string, engineerName?: string, startDate?: string, endDate?: string }): Promise<string> => {
     try {
-      const { error } = await supabase
-        .from(CONFIG.SUPABASE.TABLES.LOGS)
-        .delete()
-        .eq('logid', String(logId));
-        
-      if (error) throw new Error(`Delete Log Error: ${error.message}`);
-    } catch (e) {
-      console.error("Delete Log Error:", e);
+      const { data, error } = await supabase.functions.invoke('timelog-ai', {
+        body: params
+      });
+
+      if (error) {
+        console.error("Function Invocation Error:", error);
+        throw new Error(`AI 分析呼叫失敗: ${error.message}`);
+      }
+      
+      return data?.report || "⚠️ 無法取得分析結果";
+    } catch (e: any) {
+      console.error("AI Service Error:", e);
       throw e;
     }
   }

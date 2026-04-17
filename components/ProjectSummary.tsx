@@ -1,6 +1,6 @@
-
 import React, { useState, useMemo } from 'react';
 import { Project, Log, GlobalEngineer, LoginData } from '../types';
+import { SupabaseService } from '../services/supabaseService';
 
 interface ProjectSummaryProps {
   projects: Project[];
@@ -11,6 +11,8 @@ interface ProjectSummaryProps {
 
 export const ProjectSummary: React.FC<ProjectSummaryProps> = ({ projects, logs, engineers, loginData }) => {
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
+  const [aiAnalysis, setAiAnalysis] = useState('');
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   const closedProjects = useMemo(() => projects.filter(p => p.status === 'Closed'), [projects]);
 
@@ -56,6 +58,26 @@ export const ProjectSummary: React.FC<ProjectSummaryProps> = ({ projects, logs, 
 
     return { deptStats, memberStats, totalActual: projectLogs.reduce((sum, l) => sum + l.hours, 0) };
   }, [selectedProject, logs, engineers]);
+
+  const handleAIAnalysis = async () => {
+    if (!selectedProject) return;
+    setIsAnalyzing(true);
+    setAiAnalysis('');
+    try {
+      const params = {
+        action: 'PROJECT_QUERY',
+        projectId: selectedProject.id,
+        startDate: selectedProject.startDate,
+        endDate: selectedProject.endDate || undefined
+      };
+      const result = await SupabaseService.generateAIAnalysis(params);
+      setAiAnalysis(result);
+    } catch (e: any) {
+      alert("AI 分析失敗: " + e.message);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
 
   return (
     <div className="p-4 md:p-8 space-y-8 animate-in fade-in duration-500 overflow-y-auto max-h-screen custom-scroll">
@@ -120,6 +142,50 @@ export const ProjectSummary: React.FC<ProjectSummaryProps> = ({ projects, logs, 
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* AI Analysis Section */}
+          <div className="bg-gradient-to-br from-brand-600 to-indigo-700 p-8 rounded-3xl shadow-xl text-white relative overflow-hidden group">
+            <div className="relative z-10">
+               <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                  <div className="flex-1">
+                     <h3 className="text-xl font-black flex items-center mb-2">
+                        <i className="fa-solid fa-sparkles mr-3 text-brand-200"></i>
+                        AI 專案結案分析助手
+                     </h3>
+                     <p className="text-brand-100 text-sm font-medium leading-relaxed max-w-2xl">
+                        基於本專案所有投入工時與成員表現，產出專業的效益分析、重點摘要以及未來的改善建議。
+                     </p>
+                  </div>
+                  <button 
+                    onClick={handleAIAnalysis}
+                    disabled={isAnalyzing}
+                    className="bg-white text-brand-700 px-8 py-3.5 rounded-2xl font-black text-sm shadow-2xl shadow-black/20 hover:bg-brand-50 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center min-w-[160px]"
+                  >
+                     {isAnalyzing ? (
+                        <><i className="fa-solid fa-circle-notch fa-spin mr-2"></i>分析中...</>
+                     ) : (
+                        <><i className="fa-solid fa-wand-magic-sparkles mr-2"></i>生成智能報告</>
+                     )}
+                  </button>
+               </div>
+
+               {aiAnalysis && (
+                  <div className="mt-8 bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20 animate-in fade-in slide-in-from-top-4 duration-500">
+                     <div className="flex justify-between items-center mb-4 border-b border-white/10 pb-4">
+                        <span className="text-xs font-black uppercase tracking-widest opacity-80">AI Analysis Report</span>
+                        <button onClick={() => setAiAnalysis('')} className="text-white/60 hover:text-white"><i className="fa-solid fa-times"></i></button>
+                     </div>
+                     <div className="text-sm leading-relaxed whitespace-pre-wrap font-medium">
+                        {aiAnalysis}
+                     </div>
+                  </div>
+               )}
+            </div>
+            
+            {/* Background elements */}
+            <div className="absolute top-0 right-0 -mr-20 -mt-20 w-80 h-80 bg-white/5 rounded-full blur-3xl group-hover:bg-white/10 transition-colors"></div>
+            <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-60 h-60 bg-brand-400/10 rounded-full blur-2xl"></div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

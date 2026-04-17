@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Project, Log, GlobalEngineer } from '../types';
+import { SupabaseService } from '../services/supabaseService';
 
 interface LaborReportModalProps {
     project?: Project; // Optional: If missing, implies "All Projects"
@@ -14,6 +15,8 @@ export const LaborReportModal: React.FC<LaborReportModalProps> = ({ project, log
     const [startDate, setStartDate] = useState(project?.startDate || '');
     const [endDate, setEndDate] = useState(project?.endDate || '');
     const [selectedProjectId, setSelectedProjectId] = useState('');
+    const [aiAnalysis, setAiAnalysis] = useState('');
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
 
     const targetProjectName = project ? project.name : '所有專案';
 
@@ -108,6 +111,26 @@ export const LaborReportModal: React.FC<LaborReportModalProps> = ({ project, log
         }
     };
 
+    const handleAIAnalysis = async () => {
+        setIsAnalyzing(true);
+        setAiAnalysis('');
+        try {
+            const params = {
+                action: project ? 'PROJECT_QUERY' : (selectedProjectId ? 'PROJECT_QUERY' : 'GENERAL_SUMMARY'),
+                projectId: project ? project.id : (selectedProjectId || undefined),
+                engineerName: selectedEng || undefined,
+                startDate: startDate || undefined,
+                endDate: endDate || undefined
+            };
+            const result = await SupabaseService.generateAIAnalysis(params);
+            setAiAnalysis(result);
+        } catch (e: any) {
+            alert("AI 分析失敗: " + e.message);
+        } finally {
+            setIsAnalyzing(false);
+        }
+    };
+
     return (
         <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
             <div className="bg-white rounded-lg shadow-xl w-full max-w-5xl p-6 flex flex-col max-h-[90vh]">
@@ -145,12 +168,42 @@ export const LaborReportModal: React.FC<LaborReportModalProps> = ({ project, log
                         <label className="text-xs font-bold text-slate-500 block mb-1">結束日期</label>
                         <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full border rounded px-2 py-1.5 text-sm" />
                     </div>
-                    <div className="flex items-end">
-                        <button onClick={handleExport} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-1.5 rounded text-sm shadow-sm transition-colors">
-                            <i className="fa-solid fa-file-csv mr-2"></i>匯出 CSV
+                    <div className="flex items-end gap-2">
+                        <button 
+                            onClick={handleExport} 
+                            disabled={isAnalyzing}
+                            className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-1.5 rounded text-sm shadow-sm transition-colors disabled:opacity-50"
+                        >
+                            <i className="fa-solid fa-file-csv mr-2"></i>匯出
+                        </button>
+                        <button 
+                            onClick={handleAIAnalysis} 
+                            disabled={isAnalyzing || filteredLogs.length === 0}
+                            className="flex-1 bg-brand-600 hover:bg-brand-700 text-white font-bold py-1.5 rounded text-sm shadow-sm transition-colors disabled:opacity-50"
+                        >
+                            {isAnalyzing ? (
+                                <><i className="fa-solid fa-circle-notch fa-spin mr-2"></i>AI 分析中</>
+                            ) : (
+                                <><i className="fa-solid fa-robot mr-2"></i>AI 智能分析</>
+                            )}
                         </button>
                     </div>
                 </div>
+
+                {/* AI Analysis Result */}
+                {aiAnalysis && (
+                    <div className="mb-4 bg-brand-50 border border-brand-100 rounded-lg p-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                        <div className="flex justify-between items-center mb-2">
+                            <h4 className="font-bold text-brand-800 text-sm flex items-center">
+                                <i className="fa-solid fa-sparkles mr-2 text-brand-500"></i>AI 智能助手報告
+                            </h4>
+                            <button onClick={() => setAiAnalysis('')} className="text-brand-400 hover:text-brand-600"><i className="fa-solid fa-times"></i></button>
+                        </div>
+                        <div className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed max-h-[200px] overflow-y-auto custom-scroll pr-2">
+                            {aiAnalysis}
+                        </div>
+                    </div>
+                )}
 
                 {/* Table */}
                 <div className="flex-1 overflow-auto custom-scroll border border-slate-200 rounded">
