@@ -19,6 +19,16 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y postgresql-client-17
 
+      - name: Backup database
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/pg_dump "$DATABASE_URL" \
+            --format=custom \
+            --no-acl \
+            --no-owner \
+            -f /tmp/backup.dump
+
       - name: Install PyDrive
         run: pip install pydrive2
 
@@ -52,7 +62,7 @@ jobs:
               'title': filename,
               'parents': [{'id': os.environ['GDRIVE_FOLDER_ID']}]
           })
-          file.SetContentFile('backup.dump')
+          file.SetContentFile('/tmp/backup.dump')
           file.Upload()
           print(f"備份完成：{filename}")
           EOF
