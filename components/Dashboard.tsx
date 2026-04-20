@@ -114,6 +114,25 @@ export const Dashboard: React.FC<DashboardProps> = ({ projects, logs, messages, 
     return Object.entries(engHours).map(([name, value]) => ({ name, value: Math.round(value * 10) / 10 }));
   }, [logs, projectFilter, yearFilter]);
 
+  const categoryPieData = useMemo(() => {
+    let targetProjects = projects.filter(p => !EXCLUDED_IDS.includes(p.id) && !EXCLUDED_CLIENTS.includes(p.client));
+    
+    // 根據目前的 BarChart 篩選邏輯來決定統計哪些
+    if (barChartFilter === 'Active') {
+      targetProjects = targetProjects.filter(p => p.status === 'Active');
+    } else if (barChartFilter === 'Closed') {
+      targetProjects = targetProjects.filter(p => p.status === 'Closed');
+    }
+
+    const ats = targetProjects.filter(p => (p.projectType || 'ATS') === 'ATS').length;
+    const chs = targetProjects.filter(p => p.projectType === 'CHS').length;
+
+    return [
+      { name: 'ATS 專案', value: ats, color: '#f59e0b' }, // Amber
+      { name: 'CHS 專案', value: chs, color: '#6366f1' }  // Indigo
+    ];
+  }, [projects, barChartFilter]);
+
   // --- Schedule Overview Logic ---
   const scheduleTimeline = useMemo(() => {
     // 這裡使用的是已經過濾過的 activeProjects
@@ -338,109 +357,56 @@ export const Dashboard: React.FC<DashboardProps> = ({ projects, logs, messages, 
           </ResponsiveContainer>
         </div>
 
-        {/* Pie Chart */}
+        {/* Category Distribution Chart */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col h-[600px]">
-          <div className="flex flex-col gap-2 mb-4">
-            <h3 className="font-bold text-slate-700">人力資源分佈</h3>
-            <div className="flex gap-2">
-              {/* 年份篩選 */}
-              <select
-                value={yearFilter}
-                onChange={(e) => setYearFilter(e.target.value)}
-                className="flex-1 text-xs border border-slate-200 rounded px-2 py-1 bg-slate-50 outline-none focus:border-brand-500"
-              >
-                {availableYears.map(y => <option key={y} value={y}>{y}年度</option>)}
-              </select>
-              {/* 專案篩選 */}
-              <select
-                value={projectFilter}
-                onChange={(e) => setProjectFilter(e.target.value)}
-                className="flex-[2] text-xs border border-slate-200 rounded px-2 py-1 bg-slate-50 outline-none focus:border-brand-500"
-              >
-                <option value="">全公司總覽</option>
-                {projects
-                  .filter(p => !EXCLUDED_IDS.includes(p.id))
-                  .sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true, sensitivity: 'base' }))
-                  .map(p => (
-                    <option key={p.id} value={p.id}>{p.name} ({p.id})</option>
-                ))}
-              </select>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="font-bold text-slate-700">專案類別分佈 (ATS vs CHS)</h3>
+            <div className="text-[10px] text-slate-400 font-bold px-2 py-1 bg-slate-50 rounded border border-slate-100">
+               {categoryPieData.reduce((s, d) => s + d.value, 0)} 個專案
             </div>
           </div>
           <div className="flex-1 relative">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={pieData}
+                  data={categoryPieData}
                   cx="50%"
                   cy="50%"
-                  innerRadius={60}
-                  outerRadius={100}
+                  innerRadius={80}
+                  outerRadius={120}
                   fill="#8884d8"
-                  paddingAngle={5}
+                  paddingAngle={8}
                   dataKey="value"
+                  label={({ name, value, percent }) => `${name}: ${value} (${(percent * 100).toFixed(0)}%)`}
                 >
-                  {pieData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  {categoryPieData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
-                <Tooltip />
+                <Tooltip 
+                  contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                />
                 <Legend 
-                  layout={isMobile ? 'horizontal' : 'vertical'} 
-                  verticalAlign={isMobile ? 'bottom' : 'middle'} 
-                  align={isMobile ? 'center' : 'right'} 
-                  wrapperStyle={{ fontSize: '11px' }} 
+                  verticalAlign="bottom" 
+                  align="center"
+                  iconType="circle"
+                  wrapperStyle={{ paddingTop: '20px' }}
                 />
               </PieChart>
             </ResponsiveContainer>
           </div>
+          <div className="mt-4 grid grid-cols-2 gap-4">
+            {categoryPieData.map(d => (
+              <div key={d.name} className="p-3 rounded-lg border border-slate-50 bg-slate-50/50">
+                <div className="text-[10px] font-bold text-slate-400 uppercase mb-1">{d.name}</div>
+                <div className="text-xl font-bold text-slate-800">{d.value} <span className="text-sm font-normal text-slate-500">個案件</span></div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        {/* System Messages */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden flex flex-col max-h-[400px]">
-          <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-brand-50">
-            <h3 className="font-bold text-brand-700">
-              <i className="fa-solid fa-bullhorn mr-2"></i>系統公告
-            </h3>
-          </div>
-          <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scroll">
-            {messages.length === 0 ? (
-              <p className="text-center text-slate-400 text-sm italic py-4">目前無公告</p>
-            ) : (
-              messages.map(msg => (
-                <div key={msg.id} className="bg-slate-50 p-3 rounded-lg border border-slate-100 relative group">
-                  <div className="flex justify-between items-start mb-1">
-                    <span className="text-xs font-bold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">{msg.date}</span>
-                    {loginData.role === 'Admin' && (
-                      <button onClick={() => onDeleteMessage(msg.id)} className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <i className="fa-solid fa-trash text-xs"></i>
-                      </button>
-                    )}
-                  </div>
-                  <p className="text-sm text-slate-700 font-medium whitespace-pre-wrap">{msg.content}</p>
-                  <div className="mt-1 text-[10px] text-slate-400 text-right">- {msg.author}</div>
-                </div>
-              ))
-            )}
-          </div>
-          {loginData.role === 'Admin' && (
-            <div className="p-4 border-t border-slate-100 bg-slate-50">
-              <div className="flex gap-2">
-                <input
-                  value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                  placeholder="輸入公告內容..."
-                  className="flex-1 border border-slate-200 rounded px-3 py-2 text-sm outline-none focus:border-brand-500"
-                  onKeyDown={(e) => e.key === 'Enter' && handlePublish()}
-                />
-                <button onClick={handlePublish} className="bg-brand-600 text-white px-4 py-2 rounded text-sm font-bold hover:bg-brand-700">發布</button>
-              </div>
-            </div>
-          )}
-        </div>
-
+      <div className="mb-8">
         {/* Alert List */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden max-h-[400px] flex flex-col">
           <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-red-50">
@@ -464,7 +430,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ projects, logs, messages, 
                     <tr key={p.id} className="hover:bg-slate-50">
                       <td className="px-6 py-3 font-medium text-slate-800">
                         <div className="flex flex-col">
-                          <span className="truncate max-w-[150px]" title={p.name}>{p.name}</span>
+                          <span className="truncate max-w-[300px]" title={p.name}>{p.name}</span>
                           <span className="text-[10px] font-mono text-slate-400">{p.id}</span>
                         </div>
                       </td>
