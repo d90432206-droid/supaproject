@@ -28,9 +28,8 @@ jobs:
             --no-acl \
             --no-owner \
             -f /tmp/backup.dump
-
-      - name: Install PyDrive
-        run: pip install pydrive2
+      - name: Install Google API client
+        run: pip install google-api-python-client google-auth
 
       - name: Upload to Google Drive
         env:
@@ -41,28 +40,24 @@ jobs:
           import os
           import json
           from datetime import datetime
-          from pydrive2.auth import GoogleAuth
-          from pydrive2.drive import GoogleDrive
+          from googleapiclient.discovery import build
+          from googleapiclient.http import MediaFileUpload
+          from google.oauth2 import service_account
 
-          creds = json.loads(os.environ['GDRIVE_CREDENTIALS'])
-          with open('service_account.json', 'w') as f:
-              json.dump(creds, f)
+          creds_info = json.loads(os.environ['GDRIVE_CREDENTIALS'])
+          creds = service_account.Credentials.from_service_account_info(
+              creds_info,
+              scopes=['https://www.googleapis.com/auth/drive']
+          )
 
-          gauth = GoogleAuth()
-          gauth.settings['client_config_backend'] = 'service'
-          gauth.settings['service_config'] = {
-              'client_json_file_path': 'service_account.json',
-              'client_user_email': creds['client_email']
-          }
-          gauth.ServiceAuth()
-          drive = GoogleDrive(gauth)
+          service = build('drive', 'v3', credentials=creds)
 
           filename = f"supabase_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.dump"
-          file = drive.CreateFile({
-              'title': filename,
-              'parents': [{'id': os.environ['GDRIVE_FOLDER_ID']}]
-          })
-          file.SetContentFile('/tmp/backup.dump')
-          file.Upload()
+          file_metadata = {
+              'name': filename,
+              'parents': [os.environ['GDRIVE_FOLDER_ID']]
+          }
+          media = MediaFileUpload('/tmp/backup.dump', mimetype='application/octet-stream')
+          service.files().create(body=file_metadata, media_body=media).execute()
           print(f"備份完成：{filename}")
           EOF
