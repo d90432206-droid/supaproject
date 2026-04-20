@@ -71,8 +71,11 @@ serve(async (req) => {
     const body = await req.json();
     console.log("Receiving Request:", JSON.stringify(body));
 
-    if (body.action === 'analyze_data' || body.action === 'generate_report_v2') {
-      const report = await generateAIDataReport(body);
+    if (['analyze_data', 'generate_report_v2', 'PROJECT_QUERY', 'ENGINEER_QUERY', 'GENERAL_SUMMARY'].includes(body.action)) {
+      const result = await generateAIDataReport(body);
+      // 如果是網頁端呼叫，將物件格式化為易讀的字串
+      const report = typeof result === 'object' ? formatReportToString(result) : result;
+      
       return new Response(JSON.stringify({ report }), { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       });
@@ -91,7 +94,7 @@ serve(async (req) => {
       return new Response(JSON.stringify({ message: 'ok' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    return new Response(JSON.stringify({ error: 'Invalid Intent' }), { status: 400 });
+    return new Response(JSON.stringify({ error: `Invalid Intent: ${body.action}` }), { status: 400 });
 
   } catch (err) {
     console.error("Critical Error:", err.message);
@@ -101,6 +104,41 @@ serve(async (req) => {
     });
   }
 });
+
+function formatReportToString(report: any) {
+  if (typeof report === 'string') return report;
+  let text = `【${report.title}】\n📅 期間: ${report.period}\n\n`;
+  text += `摘要：${report.summary}\n\n`;
+  
+  if (report.stats && report.stats.length > 0) {
+    text += `📊 數據統計：\n`;
+    report.stats.forEach((s: any) => {
+      text += `• ${s.label}: ${s.value} (${s.subValue || ''})\n`;
+    });
+    text += `\n`;
+  }
+  
+  if (report.analysis && report.analysis.length > 0) {
+    text += `📝 重點分析：\n`;
+    report.analysis.forEach((a: any) => {
+      text += `[${a.topic}]\n`;
+      if (Array.isArray(a.items)) {
+        a.items.forEach((i: any) => text += `  - ${i}\n`);
+      }
+    });
+    text += `\n`;
+  }
+  
+  if (report.recommendation) {
+    text += `💡 建議方案：\n`;
+    if (Array.isArray(report.recommendation)) {
+      report.recommendation.forEach((r: any) => text += `  - ${r}\n`);
+    } else {
+      text += `  - ${report.recommendation}\n`;
+    }
+  }
+  return text;
+}
 
 async function handleLineMessage(event: any) {
   const lineId = event.source.userId;
@@ -138,7 +176,9 @@ action 選項：
 - 「本週」「這週」→ startDate=${fmt(thisMonday)}, endDate=${today}
 - 「上週」「上一週」→ startDate=${fmt(lastMonday)}, endDate=${fmt(lastSunday)}
 - 「最近」「近期」「最新」→ startDate 留空（系統自動取近一個月）
-- 「這個月」「本月」→ startDate=${today.substring(0, 7)}-01, endDate=${today}
+- 「全部」「歷史」「所有記錄」→ startDate=2024-01-01
+- 「今年」「本年」→ startDate=${today.substring(0, 4)}-01-01
+- 提及特定月份（如：3月）→ 找出該月的第一天與最後一天
 - 未提到時間 → startDate 留空
 
 Format: { "action": "...", "projectId": "...", "engineerName": "...", "startDate": "...", "endDate": "..." }
@@ -153,7 +193,14 @@ Format: { "action": "...", "projectId": "...", "engineerName": "...", "startDate
     } catch (e) { throw new Error("Intent JSON Error"); }
 
     const report = await generateAIDataReport(intent, tracker);
-    await lineClient.replyMessage({ replyToken, messages: [{ type: 'text', text: report + tracker.footer() }] });
+    if (typeof report === 'object' && report.title) {
+      const flexMsg = convertToFlexMessage(report, tracker.footer());
+      console.log("Flex Message Payload:", JSON.stringify(flexMsg));
+      await lineClient.replyMessage({ replyToken, messages: [flexMsg] });
+    } else {
+      const text = typeof report === 'string' ? report : JSON.stringify(report);
+      await lineClient.replyMessage({ replyToken, messages: [{ type: 'text', text: text + tracker.footer() }] });
+    }
 
   } catch (e) {
     console.error("Process Error:", e);
@@ -162,11 +209,22 @@ Format: { "action": "...", "projectId": "...", "engineerName": "...", "startDate
 }
 
 async function handleWeeklyReport() {
-  const summary = await generateAIDataReport({ action: 'GENERAL_SUMMARY' });
+  const tracker = new TokenTracker();
+  const summary = await generateAIDataReport({ action: 'GENERAL_SUMMARY' }, tracker);
   const { data: users } = await supabase.from('prj_settings').select('description').like('key', 'User:%');
   const ids = users?.map(u => u.description.split('|')[2]).filter(id => id) || [];
+  
+  const message = (typeof summary === 'object' && summary.title)
+    ? convertToFlexMessage(summary, tracker.footer())
+    : { type: 'text' as const, text: (typeof summary === 'string' ? summary : JSON.stringify(summary)) + tracker.footer() };
+
   for (const id of ids) {
-    try { await lineClient.pushMessage({ to: id, messages: [{ type: 'text', text: summary }] }); } catch (e) {}
+    try { 
+      console.log(`Pushing report to ${id}...`);
+      await lineClient.pushMessage({ to: id, messages: [message] }); 
+    } catch (e) {
+      console.error(`Failed to push to ${id}:`, e.message);
+    }
   }
   return new Response("ok");
 }
@@ -178,26 +236,30 @@ async function generateAIDataReport(intent: any, tracker?: TokenTracker) {
   let wbsInfo = "";
   let pContext = "";
 
-  if (projectId) {
-     const { data: p } = await supabase.from('prj_projects').select('*').ilike('projectid', `%${projectId}%`).limit(1).single();
-     if (p) {
-        if (!dStart) dStart = p.startdate;
-        pContext = `專案: ${p.projectid} ${p.name}`;
-        try {
-          const det = typeof p.details_json === 'string' ? JSON.parse(p.details_json) : p.details_json;
-          if (det?.wbs) wbsInfo = "\n【WBS 設定】:\n" + det.wbs.slice(0, 15).map((w: any) => `- ${w.id} ${w.taskName}: ${w.budgetHours}H`).join('\n');
-        } catch (e) {}
-     }
-  }
-
   if (!dStart) {
     const t = new Date(); t.setMonth(t.getMonth() - 1); dStart = t.toISOString().split('T')[0];
   }
 
   let query = supabase.from('prj_logs').select('*').gte('date', dStart).lte('date', dEnd);
-  if (projectId) query = query.ilike('projectid', `%${projectId}%`);
-  else if (engineerName) query = query.ilike('engineer', `%${engineerName}%`);
-  
+
+  if (projectId) {
+    const { data: p } = await supabase.from('prj_projects').select('*').ilike('projectid', `%${projectId}%`).limit(1).single();
+    if (p) {
+      // 優先使用精確匹配 (=) 避免模糊查詢抓到相似編號的專案 (例如：25042 不應抓到 C#25042)
+      query = query.eq('projectid', p.projectid);
+      pContext = `專案: ${p.projectid} ${p.name}`;
+      try {
+        const det = typeof p.details_json === 'string' ? JSON.parse(p.details_json) : p.details_json;
+        if (det?.wbs) wbsInfo = "\n【WBS 設定】:\n" + det.wbs.slice(0, 15).map((w: any) => `- ${w.id} ${w.taskName}: ${w.budgetHours}H`).join('\n');
+      } catch (e) {}
+    } else {
+      // 找不到主專案檔時才使用模糊查詢
+      query = query.ilike('projectid', `%${projectId}%`);
+    }
+  } else if (engineerName) {
+    query = query.ilike('engineer', `%${engineerName}%`);
+  }
+
   let { data: logs } = await query;
 
   // fallback：指定區間無資料時，自動往前找最近 30 天有紀錄的資料
@@ -214,24 +276,286 @@ async function generateAIDataReport(intent: any, tracker?: TokenTracker) {
     pContext = (pContext ? pContext + "　" : "") + `⚠️ 指定區間無資料，自動改為近 30 天（${fb}~${dEnd}）`;
   }
 
-  const ds = logs.slice(0, 200).map(l => `[${l.date}] ${l.engineer} | ${l.projectid} | ${l.hours}H | ${l.note || l.content}`).join('\n');
+  // --- 強固化統計計算：在程式碼中計算，不依賴 AI 進行加總 ---
+  const engineerStats: Record<string, number> = {};
+  logs.forEach(l => {
+    const hours = Number(l.hours) || 0;
+    const name = l.engineer || "未知";
+    engineerStats[name] = (engineerStats[name] || 0) + hours;
+  });
+  const totalHours = Object.values(engineerStats).reduce((a, b) => a + b, 0);
+  const statsDetail = Object.entries(engineerStats)
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, hours]) => `${name}: ${hours}H (${((hours / totalHours) * 100).toFixed(1)}%)`)
+    .join(", ");
+
+  const ds = logs.slice(0, 300).map(l => `[${l.date}] ${l.engineer} | ${l.projectid} | ${l.hours}H | ${l.note || l.content}`).join('\n');
 
   const isListQuery = !projectId && !engineerName;
   const prompt = isListQuery
-    ? `工時摘要。今日: ${new Date().toLocaleDateString()} | 區間: ${dStart}~${dEnd}
+    ? `你是一個專業的專案分析助手。請分析以下工時數據並以 JSON 格式回傳報告。
+今日: ${new Date().toLocaleDateString()} | 區間: ${dStart}~${dEnd}
 ${pContext ? pContext + "\n" : ""}日誌:
 ${ds}
-請：1) 列出此區間有工時紀錄的所有專案（專案ID、名稱、合計工時）。
-2) 標出近期工時最多的前3名專案。
-3) 若有明顯異常（單日爆量、停工）請備注。`
-    : `項目助手報告。今日: ${new Date().toLocaleDateString()}
+
+請嚴格回傳以下 JSON 格式，不要有其他文字：
+{
+  "title": "所有專案週報",
+  "period": "${dStart} ~ ${dEnd}",
+  "summary": "整體專案現況深度評估（約 100-200 字）",
+  "stats": [
+    { "label": "專案名稱", "value": "總工時(H)", "subValue": "佔比(%)" }
+  ],
+  "analysis": [
+    { "topic": "風險或重點觀察大項", "level": "warning", "items": ["詳細觀測點1", "詳細觀測點2"] }
+  ],
+  "recommendation": ["具體建議1", "具體建議2"]
+}
+Level 可選: "critical" (高風險/紅), "warning" (中風險/黃), "info" (正常/綠)。Stats 請列出每個專案的工時與佔比。請提供深度洞察而非僅描述數據。`
+    : `你是一個專業的人力資源與專案進度分析師。請分析進度與風險，並以 JSON 格式回傳報告。
+今日: ${new Date().toLocaleDateString()}
 目標: ${pContext || engineerName} | 區間: ${dStart}~${dEnd}
+【系統統計數據（請以此為準）】: 總投入 ${totalHours}H，其中 ${statsDetail}
 ${wbsInfo}
 日誌:
 ${ds}
-請分析 Delay 平衡進度，標註超預算風險，精確計算佔比(%)。`;
 
-  return await askGemini(prompt, false, tracker);
+請嚴格回傳以下 JSON 格式，不要有其他文字：
+{
+  "title": "${projectId ? "專案進度分析" : "工程師工時分析"}",
+  "period": "${dStart} ~ ${dEnd}",
+  "summary": "深度的整體評估與現況摘要（約 100-200 字）",
+  "stats": [
+    { "label": "人員/任務", "value": "工時(H)", "subValue": "佔比(%)" }
+  ],
+  "analysis": [
+    { "topic": "風險/進度分析大項", "level": "warning", "items": ["詳細觀測點1", "詳細觀測點2", "數據支撐與隱患"] }
+  ],
+  "recommendation": ["行動建議1", "行動建議2", "具體步驟與截止時間建議"]
+}
+Level 可選: "critical" (高風險/紅), "warning" (中風險/黃), "info" (正常/綠)。佔比請精確計算。請針對異常數據進行具體追蹤。`;
+
+  const responseText = await askGemini(prompt, true, tracker);
+  try {
+    return JSON.parse(responseText.replace(/```json|```/g, '').trim());
+  } catch (e) {
+    // Fallback if parsing fails - though askGemini with jsonOnly should be stable
+    return { title: "分析報告", summary: responseText };
+  }
+}
+
+/**
+ * 將 JSON 報告轉換為極致美觀的 LINE Flex Message (Premium Design)
+ */
+function convertToFlexMessage(report: any, trackerFooter: string) {
+  const { title, period, summary, stats = [], analysis = [], recommendation } = report;
+
+  // 1. 建立統計數據卡片 (含有視覺化的進度條)
+  const statsRows = stats.map((s: any) => {
+    // 嘗試解析百分比以製作進度條
+    let percent = 0;
+    const match = s.subValue?.match(/(\d+(\.\d+)?)/);
+    if (match) percent = Math.min(100, parseFloat(match[1]));
+
+    return {
+      type: "box",
+      layout: "vertical",
+      margin: "md",
+      contents: [
+        {
+          type: "box",
+          layout: "horizontal",
+          contents: [
+            { type: "text", text: `🔹 ${s.label || '無名稱'}`, size: "sm", color: "#555555", flex: 4, weight: "bold" as const, wrap: true },
+            { type: "text", text: String(s.value ?? "0"), size: "sm", color: "#27323E", align: "end", weight: "bold" as const, flex: 3 },
+            { type: "text", text: String(s.subValue || " "), size: "xs", color: "#999999", align: "end", flex: 2 }
+          ]
+        },
+        // 進度條 (如果 subValue 含有百分比)
+        ...(percent > 0 ? [{
+          type: "box",
+          layout: "vertical",
+          backgroundColor: "#EEEEEE",
+          height: "4px",
+          margin: "sm",
+          cornerRadius: "2px",
+          contents: [
+            {
+              type: "box",
+              layout: "vertical",
+              backgroundColor: percent > 90 ? "#FF5B5B" : "#3b82f6",
+              height: "4px",
+              width: `${percent}%`,
+              contents: [{ type: "text", text: " ", size: "xs" }] // Cannot be empty
+            }
+          ]
+        }] : [])
+      ]
+    };
+  });
+
+  // 2. 建立分析區塊 (卡片樣式)
+  const analysisBlocks = analysis.map((a: any) => {
+    const color = a.level === 'critical' ? '#FF5B5B' : (a.level === 'warning' ? '#FFB11B' : '#00B900');
+    const bgColor = a.level === 'critical' ? '#FFF5F5' : (a.level === 'warning' ? '#FFFBEB' : '#F0FDF4');
+    
+    return {
+      type: "box",
+      layout: "vertical",
+      margin: "lg",
+      paddingAll: "md",
+      backgroundColor: bgColor,
+      cornerRadius: "md",
+      borderWidth: "1px",
+      borderColor: color + "33", // 20% opacity
+      contents: [
+        {
+          type: "box",
+          layout: "horizontal",
+          contents: [
+            { type: "text", text: "⦿", color: color, size: "xs", flex: 0 },
+            { type: "text", text: String(a.topic || "分析項目"), weight: "bold" as const, size: "sm", margin: "md", color: "#333333", flex: 1 }
+          ]
+        },
+        ...(a.items || []).map((item: string) => ({
+          type: "text" as const,
+          text: `• ${item}`,
+          size: "xs" as const,
+          color: "#666666",
+          margin: "sm" as const,
+          wrap: true
+        }))
+      ]
+    };
+  });
+
+  return {
+    type: "flex" as const,
+    altText: `📊 ${title} - ${period}`.substring(0, 400),
+    contents: {
+      type: "bubble",
+      styles: {
+        header: { backgroundColor: "#27323E" },
+        footer: { backgroundColor: "#FDFDFD" }
+      },
+      header: {
+        type: "box",
+        layout: "vertical",
+        paddingAll: "xl",
+        contents: [
+          {
+            type: "box",
+            layout: "horizontal",
+            contents: [
+              { type: "text", text: "CHUYI AI ASSISTANT", color: "#FFFFFFB3", size: "xxs", weight: "bold" as const },
+              { type: "text", text: "REPORT", color: "#FFB11B", size: "xxs", weight: "bold" as const, align: "end" }
+            ]
+          },
+          { type: "text", text: String(title || "分析報告"), color: "#FFFFFF", size: "xl", weight: "bold" as const, margin: "md" },
+          {
+            type: "box",
+            layout: "horizontal",
+            margin: "sm",
+            contents: [
+              { type: "text", text: "📅", size: "xs", flex: 0 },
+              { type: "text", text: String(period || "時間區間"), color: "#FFFFFF99", size: "xs", margin: "sm" }
+            ]
+          }
+        ]
+      },
+      body: {
+        type: "box",
+        layout: "vertical",
+        paddingAll: "lg",
+        contents: [
+          // 意圖摘要
+          {
+            type: "box",
+            layout: "horizontal",
+            paddingStart: "sm",
+            paddingEnd: "sm",
+            contents: [
+              { type: "text", text: "❝", size: "xxl", color: "#E0E0E0", flex: 0 },
+              { 
+                type: "text", 
+                text: summary || "資料分析完成", 
+                size: "sm", 
+                color: "#444444", 
+                wrap: true, 
+                margin: "md", 
+                flex: 1, 
+                align: "center", 
+                style: "italic" as const,
+                gravity: "center"
+              },
+              { type: "text", text: "❞", size: "xxl", color: "#E0E0E0", flex: 0, align: "end", gravity: "bottom" }
+            ]
+          },
+          { type: "separator", margin: "xl" },
+
+          // 數據統計區
+          {
+            type: "text",
+            text: "STATISTICS DATA",
+            size: "xxs",
+            color: "#999999",
+            weight: "bold" as const,
+            margin: "xl"
+          },
+          ...statsRows,
+          
+          { type: "separator", margin: "xl" },
+
+          // 進度分析區
+          {
+            type: "text",
+            text: "PROGRESS ANALYSIS",
+            size: "xxs",
+            color: "#999999",
+            weight: "bold" as const,
+            margin: "xl"
+          },
+          ...analysisBlocks,
+
+          // 底部建議
+          {
+            type: "box",
+            layout: "vertical",
+            margin: "xxl",
+            paddingAll: "lg",
+            backgroundColor: "#27323E",
+            cornerRadius: "lg",
+            contents: [
+              {
+                type: "box",
+                layout: "horizontal",
+                contents: [
+                  { type: "text", text: "💡", size: "sm", flex: 0 },
+                  { type: "text", text: "ACTION RECOMMENDATION", size: "xs", weight: "bold" as const, color: "#FFB11B", margin: "sm" }
+                ]
+              },
+              ...(Array.isArray(recommendation) ? recommendation : [recommendation || "維持現狀，持續追蹤進度。"]).map((rec: string) => ({
+                type: "text",
+                text: `▹ ${rec}`,
+                size: "xs",
+                color: "#DDE0E3",
+                margin: "md",
+                wrap: true
+              }))
+            ]
+          }
+        ]
+      },
+      footer: trackerFooter.trim() ? {
+        type: "box",
+        layout: "vertical",
+        contents: [
+          { type: "text", text: trackerFooter.trim(), size: "xxs", color: "#CCCCCC", wrap: true, align: "center" }
+        ],
+        paddingAll: "md"
+      } : undefined
+    }
+  };
 }
 
 /**

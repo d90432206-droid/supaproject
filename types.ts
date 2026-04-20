@@ -51,6 +51,7 @@ export interface Project {
   engineers: Engineer[];
   tasks: Task[];
   holidays: string[];
+  projectType?: 'ATS' | 'CHS';
   manager?: string; // 專案負責人 (Engineer Name)
 }
 

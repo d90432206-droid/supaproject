@@ -79,6 +79,31 @@ const getISOWeek = (d: Date) => {
     return 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
 };
 
+const calculateBudgets = (project: Project) => {
+    let ats = 0, chs = 0, cpd = 0, mfg = 0;
+    const projectType = project.projectType || 'ATS';
+
+    (project.tasks || []).forEach(t => {
+        const estHours = (t.duration || 0) * 8;
+        if (t.category?.startsWith('5.0')) {
+            mfg += estHours;
+        } else if (t.category?.startsWith('6.0') && t.title?.includes('軟體調適')) {
+            cpd += estHours;
+        } else {
+            if (projectType === 'ATS') ats += estHours;
+            else chs += estHours;
+        }
+    });
+
+    return {
+        budgetATS: ats,
+        budgetCHS: chs,
+        budgetCPD: cpd,
+        budgetMFG: mfg,
+        budgetHours: ats + chs + cpd + mfg
+    };
+};
+
 export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, onClose, globalEngineers, loginData }) => {
     const [localProject, setLocalProject] = useState<Project>(JSON.parse(JSON.stringify(project)));
     const [viewMode, setViewMode] = useState<'day' | 'week' | 'month' | 'custom'>('day');
@@ -330,16 +355,21 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                     const currentEndDate = originalTask.endDate || addDays(originalTask.startDate, (originalTask.duration || 1) - 1);
                     const newEndDate = addDays(currentEndDate, daysDelta);
                     const newDuration = calculateWorkDays(newStartDate, newEndDate, localProject.holidays);
+                    const newHours = newDuration * 8;
 
                     // Delay Detection
                     if (newEndDate > currentEndDate) {
-                        setPendingDelayTask({ task: { ...originalTask, startDate: newStartDate, endDate: newEndDate, duration: newDuration }, newDate: newStartDate });
+                        setPendingDelayTask({ task: { ...originalTask, startDate: newStartDate, endDate: newEndDate, duration: newDuration, hours: newHours }, newDate: newStartDate });
                         setShowDelayModal(true);
                     } else {
                         const updatedTasks = (localProject.tasks || []).map(t =>
-                            t.id === originalTask.id ? { ...t, startDate: newStartDate, endDate: newEndDate, duration: newDuration } : t
+                            t.id === originalTask.id ? { ...t, startDate: newStartDate, endDate: newEndDate, duration: newDuration, hours: newHours } : t
                         );
-                        setLocalProject(prev => ({ ...prev, tasks: updatedTasks }));
+                        setLocalProject(prev => {
+                            const p = { ...prev, tasks: updatedTasks };
+                            const budgets = calculateBudgets(p);
+                            return { ...p, ...budgets };
+                        });
                     }
                 }
             }
@@ -371,7 +401,11 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
             }
             return t;
         });
-        setLocalProject(prev => ({ ...prev, tasks: updatedTasks }));
+        setLocalProject(prev => {
+            const p = { ...prev, tasks: updatedTasks };
+            const budgets = calculateBudgets(p);
+            return { ...p, ...budgets };
+        });
         setShowDelayModal(false);
         setPendingDelayTask(null);
         setDelayReasonInput('');
@@ -826,14 +860,18 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                 progress: finalTask.progress || 0
             } as Task);
         }
-        setLocalProject({ ...localProject, tasks: newTasks });
+        
+        // Auto-update budgets
+        const budgets = calculateBudgets({ ...localProject, tasks: newTasks });
+        setLocalProject({ ...localProject, tasks: newTasks, ...budgets });
         setShowEditModal(false);
     };
 
     const deleteTask = () => {
         if (!confirm("確定刪除此任務？")) return;
         const newTasks = (localProject.tasks || []).filter(t => t.id !== editingTask.id);
-        setLocalProject({ ...localProject, tasks: newTasks });
+        const budgets = calculateBudgets({ ...localProject, tasks: newTasks });
+        setLocalProject({ ...localProject, tasks: newTasks, ...budgets });
         setShowEditModal(false);
     };
 
@@ -934,11 +972,12 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                                             style={{ width: colWidth }}
                                             onClick={() => {
                                                 const newHolidays = d.isHoliday ? (localProject.holidays || []).filter(h => h !== d.dateStr) : [...(localProject.holidays || []), d.dateStr];
-                                                const newTasks = (localProject.tasks || []).map(t => ({
+                                    const newTasks = (localProject.tasks || []).map(t => ({
                                                     ...t,
                                                     duration: calculateWorkDays(t.startDate, t.endDate || t.startDate, newHolidays)
                                                 }));
-                                                setLocalProject({ ...localProject, holidays: newHolidays, tasks: newTasks });
+                                                const budgets = calculateBudgets({ ...localProject, holidays: newHolidays, tasks: newTasks });
+                                                setLocalProject({ ...localProject, holidays: newHolidays, tasks: newTasks, ...budgets });
                                             }}
                                             title={d.isHoliday ? '取消休假' : '設為休假'}
                                         >
@@ -1172,7 +1211,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                                         onChange={e => {
                                             const newStart = e.target.value;
                                             const newDur = calculateWorkDays(newStart, editingTask.endDate || newStart, localProject.holidays);
-                                            setEditingTask({ ...editingTask, startDate: newStart, duration: newDur });
+                                            setEditingTask({ ...editingTask, startDate: newStart, duration: newDur, hours: newDur * 8 });
                                         }}
                                         className="w-full border rounded px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-500"
                                         disabled={!canManage}
@@ -1186,7 +1225,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                                         onChange={e => {
                                             const newEnd = e.target.value;
                                             const newDur = calculateWorkDays(editingTask.startDate || newEnd, newEnd, localProject.holidays);
-                                            setEditingTask({ ...editingTask, endDate: newEnd, duration: newDur });
+                                            setEditingTask({ ...editingTask, endDate: newEnd, duration: newDur, hours: newDur * 8 });
                                         }}
                                         className="w-full border rounded px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-500"
                                         disabled={!canManage}

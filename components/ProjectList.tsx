@@ -71,6 +71,7 @@ export const ProjectList: React.FC<ProjectListProps> = ({ projects, loginData, o
     setEditingProject({
       id: '', name: '', client: '', budgetHours: 0, budgetATS: 0, budgetCHS: 0, budgetCPD: 0, budgetMFG: 0, status: 'Active',
       startDate: today,
+      projectType: 'ATS',
       wbs: JSON.parse(JSON.stringify(defaultWBS)), // Deep copy default WBS
       tasks: initialTasks, // 帶入預設任務
       engineers: [], holidays: []
@@ -192,6 +193,7 @@ export const ProjectList: React.FC<ProjectListProps> = ({ projects, loginData, o
               <th className="px-6 py-3">編號 (ID)</th>
               <th className="px-6 py-3">專案名稱</th>
               <th className="px-6 py-3">客戶</th>
+              <th className="px-6 py-3">類別</th>
               <th className="px-6 py-3">預算</th>
               <th className="px-6 py-3">狀態</th>
               <th className="px-6 py-3 text-right">操作</th>
@@ -213,6 +215,11 @@ export const ProjectList: React.FC<ProjectListProps> = ({ projects, loginData, o
                 <td className="px-6 py-4 font-mono text-slate-500">{p.id}</td>
                 <td className="px-6 py-4 font-bold text-slate-800">{p.name}</td>
                 <td className="px-6 py-4 text-slate-600">{p.client || '-'}</td>
+                <td className="px-6 py-4">
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${p.projectType === 'CHS' ? 'bg-indigo-100 text-indigo-700' : 'bg-amber-100 text-amber-700'}`}>
+                    {p.projectType || 'ATS'}
+                  </span>
+                </td>
                 <td className="px-6 py-4">
                   <span className="font-bold text-slate-700">{p.budgetHours}h</span>
                 </td>
@@ -316,13 +323,26 @@ export const ProjectList: React.FC<ProjectListProps> = ({ projects, loginData, o
                   className="w-full border border-slate-200 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none" 
                 />
               </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">客戶名稱</label>
-                <input 
-                  value={editingProject.client} 
-                  onChange={e => setEditingProject({...editingProject, client: e.target.value})}
-                  className="w-full border border-slate-200 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none" 
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">客戶名稱</label>
+                  <input 
+                    value={editingProject.client} 
+                    onChange={e => setEditingProject({...editingProject, client: e.target.value})}
+                    className="w-full border border-slate-200 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none" 
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">專案類別 <span className="text-red-500">*</span></label>
+                  <select
+                    value={editingProject.projectType || 'ATS'}
+                    onChange={e => setEditingProject({...editingProject, projectType: e.target.value as 'ATS' | 'CHS'})}
+                    className="w-full border border-slate-200 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+                  >
+                    <option value="ATS">ATS</option>
+                    <option value="CHS">CHS</option>
+                  </select>
+                </div>
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-2">預算工時分配</label>
