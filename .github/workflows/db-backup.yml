@@ -1,0 +1,62 @@
+name: Supabase Daily Backup
+
+on:
+  schedule:
+    - cron: '0 18 * * *'  # 台灣時間每天凌晨 2 點（UTC+8）
+  workflow_dispatch:        # 允許手動觸發
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install PostgreSQL client
+        run: sudo apt-get install -y postgresql-client
+
+      - name: Backup database
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          pg_dump "$DATABASE_URL" \
+            --format=custom \
+            --no-acl \
+            --no-owner \
+            -f backup.dump
+
+      - name: Install PyDrive
+        run: pip install pydrive2
+
+      - name: Upload to Google Drive
+        env:
+          GDRIVE_CREDENTIALS: ${{ secrets.GDRIVE_CREDENTIALS }}
+          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+        run: |
+          python3 << 'EOF'
+          import os
+          import json
+          from datetime import datetime
+          from pydrive2.auth import GoogleAuth
+          from pydrive2.drive import GoogleDrive
+
+          creds = json.loads(os.environ['GDRIVE_CREDENTIALS'])
+          with open('service_account.json', 'w') as f:
+              json.dump(creds, f)
+
+          gauth = GoogleAuth()
+          gauth.settings['client_config_backend'] = 'service'
+          gauth.settings['service_config'] = {
+              'client_json_file_path': 'service_account.json',
+              'client_user_email': creds['client_email']
+          }
+          gauth.ServiceAuth()
+          drive = GoogleDrive(gauth)
+
+          filename = f"supabase_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.dump"
+          file = drive.CreateFile({
+              'title': filename,
+              'parents': [{'id': os.environ['GDRIVE_FOLDER_ID']}]
+          })
+          file.SetContentFile('backup.dump')
+          file.Upload()
+          print(f"備份完成：{filename}")
+          EOF
