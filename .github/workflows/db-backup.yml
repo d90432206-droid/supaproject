@@ -19,16 +19,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y postgresql-client-17
 
-      - name: Backup database
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: |
-          pg_dump "$DATABASE_URL" \
-            --format=custom \
-            --no-acl \
-            --no-owner \
-            -f backup.dump
-
       - name: Install PyDrive
         run: pip install pydrive2
 
