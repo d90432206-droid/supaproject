@@ -23,24 +23,18 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
+          FILENAME="supabase_backup_$(date +%Y%m%d_%H%M%S).dump"
           /usr/lib/postgresql/17/bin/pg_dump "$DATABASE_URL" \
             --format=custom \
             --no-acl \
             --no-owner \
-            -f /tmp/backup.dump
+            -f /tmp/$FILENAME
+          echo "BACKUP_FILE=/tmp/$FILENAME" >> $GITHUB_ENV
+          echo "BACKUP_NAME=$FILENAME" >> $GITHUB_ENV
 
-      - name: Install Rclone
-        run: curl https://rclone.org/install.sh | sudo bash
-
-      - name: Upload to Google Drive
-        env:
-          GDRIVE_CREDENTIALS: ${{ secrets.GDRIVE_CREDENTIALS }}
-          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
-        run: |
-          echo "$GDRIVE_CREDENTIALS" > /tmp/service_account.json
-          FILENAME="supabase_backup_$(date +%Y%m%d_%H%M%S).dump"
-          cp /tmp/backup.dump /tmp/$FILENAME
-          rclone copy /tmp/$FILENAME \
-            ":drive,service_account_file=/tmp/service_account.json,scope=drive,root_folder_id=$GDRIVE_FOLDER_ID:" \
-            --drive-acknowledge-abuse
-          echo "備份完成：$FILENAME"
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.BACKUP_NAME }}
+          path: ${{ env.BACKUP_FILE }}
+          retention-days: 90
