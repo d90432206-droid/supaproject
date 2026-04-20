@@ -28,36 +28,19 @@ jobs:
             --no-acl \
             --no-owner \
             -f /tmp/backup.dump
-      - name: Install Google API client
-        run: pip install google-api-python-client google-auth
+
+      - name: Install Rclone
+        run: curl https://rclone.org/install.sh | sudo bash
 
       - name: Upload to Google Drive
         env:
           GDRIVE_CREDENTIALS: ${{ secrets.GDRIVE_CREDENTIALS }}
           GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
         run: |
-          python3 << 'EOF'
-          import os
-          import json
-          from datetime import datetime
-          from googleapiclient.discovery import build
-          from googleapiclient.http import MediaFileUpload
-          from google.oauth2 import service_account
-
-          creds_info = json.loads(os.environ['GDRIVE_CREDENTIALS'])
-          creds = service_account.Credentials.from_service_account_info(
-              creds_info,
-              scopes=['https://www.googleapis.com/auth/drive']
-          )
-
-          service = build('drive', 'v3', credentials=creds)
-
-          filename = f"supabase_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.dump"
-          file_metadata = {
-              'name': filename,
-              'parents': [os.environ['GDRIVE_FOLDER_ID']]
-          }
-          media = MediaFileUpload('/tmp/backup.dump', mimetype='application/octet-stream')
-          service.files().create(body=file_metadata, media_body=media).execute()
-          print(f"備份完成：{filename}")
-          EOF
+          echo "$GDRIVE_CREDENTIALS" > /tmp/service_account.json
+          FILENAME="supabase_backup_$(date +%Y%m%d_%H%M%S).dump"
+          cp /tmp/backup.dump /tmp/$FILENAME
+          rclone copy /tmp/$FILENAME \
+            ":drive,service_account_file=/tmp/service_account.json,scope=drive,root_folder_id=$GDRIVE_FOLDER_ID:" \
+            --drive-acknowledge-abuse
+          echo "備份完成：$FILENAME"
