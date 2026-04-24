@@ -118,7 +118,8 @@ export const SupabaseService = {
           engineers: details.engineers || [],
           tasks: details.tasks || [],
           holidays: details.holidays || [],
-          projectType: details.projectType || 'ATS'
+          projectType: details.projectType || 'ATS',
+          progressNotes: details.progressNotes || []
         };
       });
 
@@ -176,7 +177,8 @@ export const SupabaseService = {
         budgetCHS: project.budgetCHS || 0,
         budgetCPD: project.budgetCPD || 0,
         budgetMFG: project.budgetMFG || 0,
-        projectType: project.projectType || 'ATS'
+        projectType: project.projectType || 'ATS',
+        progressNotes: project.progressNotes || []
       };
       const safeEndDate = project.endDate && project.endDate.trim() !== '' ? project.endDate : null;
 

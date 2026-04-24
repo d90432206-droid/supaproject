@@ -35,6 +35,13 @@ export interface WBSCategory {
   collapsed: boolean;
 }
 
+export interface ProgressNote {
+  id: string;
+  type: 'Notice' | 'Record';
+  content: string;
+  date: string;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -53,6 +60,7 @@ export interface Project {
   holidays: string[];
   projectType?: 'ATS' | 'CHS';
   manager?: string; // 專案負責人 (Engineer Name)
+  progressNotes?: ProgressNote[];
 }
 
 export interface Log {

@@ -188,6 +188,49 @@ export const ProjectSummary: React.FC<ProjectSummaryProps> = ({ projects, logs, 
             <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-60 h-60 bg-brand-400/10 rounded-full blur-2xl"></div>
           </div>
 
+          {/* Project Progress Notes (Notice & Record) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {/* Notice Section */}
+            <div className="bg-white rounded-3xl shadow-sm border border-red-100 overflow-hidden">
+               <div className="bg-red-50 px-6 py-4 border-b border-red-100 flex items-center justify-between">
+                  <h3 className="font-bold text-red-700 flex items-center">
+                    <i className="fa-solid fa-triangle-exclamation mr-2"></i>
+                    異常注意與風險記錄
+                  </h3>
+               </div>
+               <div className="p-6 space-y-4 max-h-[400px] overflow-y-auto custom-scroll">
+                  {(!selectedProject.progressNotes || selectedProject.progressNotes.filter(n => n.type === 'Notice').length === 0) ? (
+                    <div className="text-center py-10 text-slate-400 italic">無異常記錄</div>
+                  ) : selectedProject.progressNotes.filter(n => n.type === 'Notice').map(note => (
+                    <div key={note.id} className="p-4 bg-red-50/50 rounded-2xl border border-red-100 relative">
+                       <span className="absolute top-4 right-4 text-[10px] font-mono text-red-400">{note.date}</span>
+                       <p className="text-sm text-red-900 font-medium whitespace-pre-wrap leading-relaxed pr-20">{note.content}</p>
+                    </div>
+                  ))}
+               </div>
+            </div>
+
+            {/* Record Section */}
+            <div className="bg-white rounded-3xl shadow-sm border border-blue-100 overflow-hidden">
+               <div className="bg-blue-50 px-6 py-4 border-b border-blue-100 flex items-center justify-between">
+                  <h3 className="font-bold text-blue-700 flex items-center">
+                    <i className="fa-solid fa-clipboard-list mr-2"></i>
+                    專案執行記錄備註
+                  </h3>
+               </div>
+               <div className="p-6 space-y-4 max-h-[400px] overflow-y-auto custom-scroll">
+                  {(!selectedProject.progressNotes || selectedProject.progressNotes.filter(n => n.type === 'Record').length === 0) ? (
+                    <div className="text-center py-10 text-slate-400 italic">無一般記錄</div>
+                  ) : selectedProject.progressNotes.filter(n => n.type === 'Record').map(note => (
+                    <div key={note.id} className="p-4 bg-blue-50/50 rounded-2xl border border-blue-100 relative">
+                       <span className="absolute top-4 right-4 text-[10px] font-mono text-blue-400">{note.date}</span>
+                       <p className="text-sm text-blue-900 font-medium whitespace-pre-wrap leading-relaxed pr-20">{note.content}</p>
+                    </div>
+                  ))}
+               </div>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {/* Department Table */}
             <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">

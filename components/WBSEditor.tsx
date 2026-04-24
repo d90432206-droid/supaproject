@@ -112,6 +112,8 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
     const [showTeamModal, setShowTeamModal] = useState(false);
     const [showWBSModal, setShowWBSModal] = useState(false);
     const [editingTask, setEditingTask] = useState<Partial<Task>>({});
+    const [showProgressModal, setShowProgressModal] = useState(false);
+    const [newNote, setNewNote] = useState<{ type: 'Notice' | 'Record', content: string }>({ type: 'Record', content: '' });
 
     const taskHoursMap = useMemo(() => {
         const map: Record<string, number> = {};
@@ -512,6 +514,25 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
         setLocalProject({ ...localProject, wbs: newWbs });
     };
 
+    const handleSaveNote = () => {
+        if (!newNote.content.trim()) return;
+        const note = {
+            id: `note-${Date.now()}`,
+            type: newNote.type,
+            content: newNote.content,
+            date: new Date().toLocaleString('zh-TW', { hour12: false })
+        };
+        const updatedNotes = [...(localProject.progressNotes || []), note];
+        // @ts-ignore
+        setLocalProject({ ...localProject, progressNotes: updatedNotes });
+        setNewNote({ ...newNote, content: '' });
+    };
+
+    const handleDeleteNote = (id: string) => {
+        const updatedNotes = (localProject.progressNotes || []).filter(n => n.id !== id);
+        setLocalProject({ ...localProject, progressNotes: updatedNotes });
+    };
+
     const exportImage = async () => {
         // @ts-ignore
         if (typeof html2canvas === 'undefined') return alert("圖片匯出元件尚未載入，請檢查網路連線或重新整理頁面。");
@@ -547,7 +568,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                 dateRangeHtml = `<span class="text-sm text-slate-500 ml-auto font-normal">期間: ${localProject.startDate} ~ ${localProject.endDate || '未定'}</span>`;
             }
 
-            titleDiv.innerHTML = `<span>專案: ${localProject.name}</span> <span class="text-xs text-slate-500 font-mono bg-slate-100 px-2 py-1 rounded">ID: ${localProject.id}</span>${dateRangeHtml}`;
+            titleDiv.innerHTML = `<span>專案: ${localProject.id} / ${localProject.client} / ${localProject.name}</span>${dateRangeHtml}`;
             clone.insertBefore(titleDiv, clone.firstChild);
 
             // Unroll scrollable areas & Fix Truncation
@@ -686,7 +707,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                 dateRangeHtml = `<span class="text-sm text-slate-500 ml-auto font-normal">期間: ${localProject.startDate} ~ ${localProject.endDate || '未定'}</span>`;
             }
 
-            titleDiv.innerHTML = `<span>專案: ${localProject.name}</span> <span class="text-xs text-slate-500 font-mono bg-slate-100 px-2 py-1 rounded">ID: ${localProject.id}</span>${dateRangeHtml}`;
+            titleDiv.innerHTML = `<span>專案: ${localProject.id} / ${localProject.client} / ${localProject.name}</span>${dateRangeHtml}`;
             clone.insertBefore(titleDiv, clone.firstChild);
 
             // Unroll scrollable areas
@@ -894,7 +915,7 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                     <button onClick={handleCloseAttempt} className="text-xs font-bold text-slate-500 hover:text-brand-600 flex items-center gap-1 shrink-0"><i className="fa-solid fa-arrow-left"></i> 返回</button>
                     <div className="h-4 w-px bg-slate-300 mx-1 shrink-0"></div>
                     <div className="font-bold text-slate-700 flex items-center gap-2 truncate">
-                        <span className="truncate max-w-[100px] md:max-w-none">{localProject.name}</span>
+                        <span className="truncate max-w-[200px] md:max-w-none">{localProject.id} / {localProject.client} / {localProject.name}</span>
                         {hasUnsavedChanges && <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold animate-pulse shrink-0">未儲存</span>}
                     </div>
                 </div>
@@ -923,6 +944,12 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                                 <button onClick={() => toggleAllWBS(false)} className="w-8 border rounded flex items-center justify-center bg-white hover:bg-slate-50 text-slate-500" title="全部展開"><i className="fa-solid fa-angles-down"></i></button>
                                 <button onClick={() => toggleAllWBS(true)} className="w-8 border rounded flex items-center justify-center bg-white hover:bg-slate-50 text-slate-500" title="全部收合"><i className="fa-solid fa-angles-up"></i></button>
                             </div>
+                        </div>
+                        <div>
+                            <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">專案紀錄</label>
+                            <button onClick={() => setShowProgressModal(true)} className="w-full border rounded px-3 py-1 text-xs font-bold bg-brand-50 hover:bg-brand-100 text-brand-600 flex items-center justify-center gap-1.5 h-[26px]">
+                                <i className="fa-solid fa-file-pen"></i> 專案進度備註
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -1113,52 +1140,90 @@ export const WBSEditor: React.FC<WBSEditorProps> = ({ project, logs, onUpdate, o
                 </div>
             </div>
 
-            {/* Weekly Stats Footer */}
-            <div className="h-48 shrink-0 bg-white border-t border-slate-200 flex flex-col">
-                <div className="px-4 py-2 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                    <h4 className="font-bold text-xs text-brand-600"><i className="fa-solid fa-chart-simple mr-2"></i>本專案每週工時統計</h4>
-                    <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-slate-400">週次基準日:</span>
-                        <input type="date" value={statsWeeklyDate} onChange={e => setStatsWeeklyDate(e.target.value)} className="border rounded px-2 py-0.5 text-xs font-mono" />
-                        <button onClick={() => setShowReportModal(true)} className="bg-brand-600 hover:bg-brand-700 text-white border border-brand-700 px-3 py-1 rounded text-xs font-bold shadow-sm flex items-center transition-colors">
-                            <i className="fa-solid fa-table-list mr-1.5"></i>詳細報表
-                        </button>
+            {/* Progress Notes Modal */}
+            {showProgressModal && (
+                <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
+                    <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl flex flex-col max-h-[90vh]">
+                        <div className="p-4 border-b border-slate-200 flex justify-between items-center bg-brand-600 text-white rounded-t-lg">
+                            <h3 className="font-bold text-lg flex items-center gap-2"><i className="fa-solid fa-file-invoice"></i> 專案進度備註與記錄</h3>
+                            <button onClick={() => setShowProgressModal(false)} className="text-white hover:bg-white/20 rounded-full w-8 h-8 flex items-center justify-center transition-colors"><i className="fa-solid fa-xmark"></i></button>
+                        </div>
+                        
+                        <div className="p-6 overflow-y-auto flex-1 space-y-6">
+                            {/* Input Section */}
+                            <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-4">
+                                <div className="flex gap-4">
+                                    <div className="flex-1">
+                                        <label className="text-xs font-bold text-slate-500 block mb-2">記錄類別</label>
+                                        <div className="flex gap-2">
+                                            <button 
+                                                onClick={() => setNewNote({ ...newNote, type: 'Notice' })}
+                                                className={`flex-1 py-2 rounded-md text-xs font-bold border-2 transition-all flex items-center justify-center gap-2 ${newNote.type === 'Notice' ? 'bg-red-50 border-red-500 text-red-600 shadow-sm' : 'bg-white border-slate-200 text-slate-400 hover:border-red-200'}`}
+                                            >
+                                                <i className="fa-solid fa-triangle-exclamation"></i> 注意 (異常記錄)
+                                            </button>
+                                            <button 
+                                                onClick={() => setNewNote({ ...newNote, type: 'Record' })}
+                                                className={`flex-1 py-2 rounded-md text-xs font-bold border-2 transition-all flex items-center justify-center gap-2 ${newNote.type === 'Record' ? 'bg-blue-50 border-blue-500 text-blue-600 shadow-sm' : 'bg-white border-slate-200 text-slate-400 hover:border-blue-200'}`}
+                                            >
+                                                <i className="fa-solid fa-clipboard-list"></i> 記錄 (專案狀況)
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold text-slate-500 block mb-2">內容描述</label>
+                                    <textarea 
+                                        value={newNote.content}
+                                        onChange={e => setNewNote({ ...newNote, content: e.target.value })}
+                                        className="w-full border rounded-md p-3 text-sm h-24 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all shadow-inner"
+                                        placeholder={newNote.type === 'Notice' ? '請描述專案發生的異常狀況或需要特別注意的事項...' : '請記錄當前專案進度、會議摘要或一般備註...'}
+                                    />
+                                </div>
+                                <button 
+                                    onClick={handleSaveNote}
+                                    className="w-full bg-brand-600 hover:bg-brand-700 text-white py-2.5 rounded-md text-sm font-bold shadow-md transition-colors flex items-center justify-center gap-2"
+                                >
+                                    <i className="fa-solid fa-save"></i> 儲存此筆記錄
+                                </button>
+                            </div>
+
+                            {/* List Section */}
+                            <div className="space-y-4">
+                                <h4 className="font-bold text-slate-700 flex items-center gap-2 border-b border-slate-100 pb-2">
+                                    <i className="fa-solid fa-history text-slate-400"></i> 歷史記錄回顧
+                                </h4>
+                                <div className="space-y-3">
+                                    {(!localProject.progressNotes || localProject.progressNotes.length === 0) ? (
+                                        <div className="text-center py-10 text-slate-400 italic bg-slate-50 rounded-lg border border-dashed border-slate-200">
+                                            尚未有任何記錄
+                                        </div>
+                                    ) : [...(localProject.progressNotes)].reverse().map(note => (
+                                        <div key={note.id} className={`p-4 rounded-lg border-l-4 shadow-sm bg-white border ${note.type === 'Notice' ? 'border-l-red-500 border-red-100' : 'border-l-blue-500 border-blue-100'}`}>
+                                            <div className="flex justify-between items-start mb-2">
+                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${note.type === 'Notice' ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'}`}>
+                                                    {note.type === 'Notice' ? '注意' : '記錄'}
+                                                </span>
+                                                <div className="flex items-center gap-3">
+                                                    <span className="text-[10px] text-slate-400 font-mono">{note.date}</span>
+                                                    {canManage && (
+                                                        <button onClick={() => handleDeleteNote(note.id)} className="text-slate-300 hover:text-red-500 transition-colors"><i className="fa-solid fa-trash-can text-xs"></i></button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{note.content}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="p-4 border-t border-slate-100 bg-slate-50 rounded-b-lg">
+                            <button onClick={() => setShowProgressModal(false)} className="w-full bg-slate-800 hover:bg-slate-900 text-white py-2 rounded-md text-xs font-bold transition-colors">關閉視窗</button>
+                        </div>
                     </div>
                 </div>
-                <div className="flex-1 overflow-auto custom-scroll">
-                    <table className="w-full text-xs text-left">
-                        <thead className="text-slate-500 bg-slate-50 sticky top-0">
-                            <tr>
-                                <th className="px-4 py-2">人員</th>
-                                {weekDays.map(d => (
-                                    <th key={d.dateStr} className="px-2 py-2 text-center border-l border-slate-100">
-                                        <div>{d.label}</div>
-                                        <div className="text-[9px] font-normal">{d.dateStr.slice(5)}</div>
-                                    </th>
-                                ))}
-                                <th className="px-4 py-2 text-right">總計</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                            {Object.entries(weeklyStatsData).length === 0 ? (
-                                <tr><td colSpan={9} className="text-center py-8 text-slate-400">本週無工時紀錄</td></tr>
-                            ) : Object.entries(weeklyStatsData).map(([eng, days]) => (
-                                <tr key={eng}>
-                                    <td className="px-4 py-2 font-bold text-slate-700">{eng}</td>
-                                    {weekDays.map(d => (
-                                        <td key={d.dateStr} className="px-2 py-2 text-center border-l border-slate-100 font-mono">
-                                            {days[d.dateStr] ? <span className="font-bold text-brand-600">{days[d.dateStr]}</span> : <span className="text-slate-200">-</span>}
-                                        </td>
-                                    ))}
-                                    <td className="px-4 py-2 text-right font-bold text-slate-800">
-                                        {Object.values(days).reduce((a, b) => a + b, 0)}
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+            )}
 
             {/* --- MODALS --- */}
             {/* Task Edit Modal */}
